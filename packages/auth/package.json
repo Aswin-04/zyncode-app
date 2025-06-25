@@ -13,10 +13,20 @@
   "license": "ISC",
   "dependencies": {
     "@repo/db": "workspace:*",
+    "@types/jsonwebtoken": "^9.0.10",
     "dotenv": "^16.5.0",
     "jsonwebtoken": "^9.0.2"
   },
   "devDependencies": {
-    "@repo/typescript-config": "workspace:*"
+    "@repo/typescript-config": "workspace:*",
+    "@types/express": "^5.0.3",
+    "express": "^5.1.0"
+  },
+  "peerDependencies": {
+    "@types/express": "^5.0.3",
+    "express": "^5.1.0"
+  },
+  "exports": {
+    ".": "./dist/index.js"
   }
 }
