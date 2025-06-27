@@ -1,5 +1,5 @@
 import 'dotenv/config'
-import {Pool} from 'pg'
+import {Pool, QueryConfig} from 'pg'
 
 if(!process.env.DATABASE_URL) {
   throw new Error("DATABASE_URL is not set in the environment");
@@ -7,6 +7,6 @@ if(!process.env.DATABASE_URL) {
 
 const pool = new Pool({connectionString: process.env.DATABASE_URL})
 
-export const query = (text: string, params?: any[]) => {
-  return pool.query(text, params)
+export const query = (config: QueryConfig) => {
+  return pool.query(config)
 }

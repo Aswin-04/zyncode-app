@@ -19,7 +19,9 @@
   },
   "devDependencies": {
     "@repo/typescript-config": "workspace:*",
+    "@types/bcrypt": "^5.0.2",
     "@types/express": "^5.0.3",
+    "bcrypt": "^6.0.0",
     "express": "^5.1.0"
   },
   "peerDependencies": {
@@ -27,6 +29,7 @@
     "express": "^5.1.0"
   },
   "exports": {
-    ".": "./dist/index.js"
+    ".": "./dist/index.js",
+    "./password": "./dist/lib/password.js"
   }
 }

@@ -5,16 +5,23 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "tsc && node dist/index.js"
+    "start": "tsc && node dist/index.js",
+    "dev": "nodemon"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "devDependencies": {
-    "@repo/db": "workspace:*",
-    "@repo/typescript-config": "workspace:*"
-  },
   "dependencies": {
-    "dotenv": "^16.5.0"
+    "@repo/auth": "workspace:*",
+    "@repo/db": "workspace:*",
+    "dotenv": "^16.5.0",
+    "express": "^5.1.0",
+    "zod": "^3.25.67"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:*",
+    "@types/express": "^5.0.3",
+    "nodemon": "^3.1.10",
+    "ts-node": "^10.9.2"
   }
 }

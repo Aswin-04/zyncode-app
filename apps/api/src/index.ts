@@ -1,17 +1,18 @@
 import "dotenv/config"
-import * as db from "@repo/db"
+import express from "express";
+import AuthRouter from './routes/auth'
 
-async function testDb() {
-  console.log(db)
-  try {
-    const result = await db.query(`SELECT * FROM users;`);
-    console.log('Connected to DB! Time:', result)
-  }
+const PORT = process.env.PORT || 3000 
 
-  catch(error) {
-    console.log("Failed to connect to DB", error);
-    process.exit(1);
-  }
-}
+const app = express()
 
-testDb()
+app.get('/', (req, res) => {
+  res.send("Hello, from server")
+})
+
+app.use(express.json())
+app.use('/auth', AuthRouter)
+
+app.listen(PORT, () => {
+  console.log(`Listening on port (${PORT})`)
+})
