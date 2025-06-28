@@ -1,5 +1,6 @@
-import { signUpSchema } from "./user.schema";
+import { signUpSchema, loginSchema } from "./user.schema";
 
 export {
-  signUpSchema
+  signUpSchema,
+  loginSchema
 }

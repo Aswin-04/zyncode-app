@@ -9,6 +9,7 @@ const passwordSchema = z
 const emailSchema = z
   .email()
   .min(1)
+  .trim()
   .transform((email) => email.toLowerCase())
   
 
@@ -23,3 +24,8 @@ export const signUpSchema = z.object({
   email: emailSchema,
   password: passwordSchema
 }) 
+
+export const loginSchema = z.object({
+  email: emailSchema,
+  password: passwordSchema
+})

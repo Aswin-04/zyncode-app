@@ -9,16 +9,17 @@ export const hashPassword = async (userPassword: string) =>  {
   catch(err) {
     throw new Error("Error while hashing password")
   }
-
 }
 
-export const comparePassword = (userPassword: string, hashedPassword: string) => {
-  bcrypt.compare(userPassword, hashedPassword, (err, same) => {
-    if(err) {
-      throw new Error("Error while comparing password", err)
-    }
-    return same;
-  })
+export const comparePassword = async (userPassword: string, hashedPassword: string) => {
+  try {
+    const isPasswordValid = await bcrypt.compare(userPassword, hashedPassword)
+    return isPasswordValid
+  }
+
+  catch(err) {
+    throw new Error("Error while comparing password", {cause: err})
+  }
 }
 
 
