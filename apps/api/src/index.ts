@@ -11,7 +11,7 @@ app.get('/', (req, res) => {
 })
 
 app.use(express.json())
-app.use('/auth', AuthRouter)
+app.use('/api/v1/auth', AuthRouter)
 
 app.listen(PORT, () => {
   console.log(`Listening on port (${PORT})`)
