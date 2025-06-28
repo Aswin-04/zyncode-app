@@ -2,20 +2,15 @@ import express, { Router } from 'express'
 import * as db from '@repo/db'
 import { hashPassword } from '@repo/auth/password'
 import { signJwt } from '@repo/auth'
-import * as z from 'zod/v4'
+import {signUpSchema} from '@repo/zod/schemas'
 
-const UserSchema = z.object({
-  name: z.string().min(1).max(50).nonempty(),
-  email: z.email().nonempty(),
-  password: z.string().nonempty().min(8).max(50)
-})
 
 const router:Router = express.Router()
 
 router.post('/', async (req, res) => {
 
   const payload = req.body;
-  const result = UserSchema.safeParse(payload)
+  const result = signUpSchema.safeParse(payload)
   if(!result.success) {
     res.status(403).json({message: "invalid credentials"})
     return 
