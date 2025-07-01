@@ -3,33 +3,38 @@ import * as db from '@repo/db'
 import { hashPassword } from '@repo/auth/password'
 import { signJwt } from '@repo/auth'
 import {signUpSchema} from '@repo/zod/schemas'
+import { ApiError } from '../../error'
 
 
 const router:Router = express.Router()
 
-router.post('/', async (req, res) => {
-
-  const payload = req.body;
-  const result = signUpSchema.safeParse(payload)
-  if(!result.success) {
-    res.status(403).json({message: "invalid credentials"})
-    return 
-  }
-
-  const {name, email, password} = result.data
-
-  const query1 = {
-    text: 'SELECT email_address FROM users WHERE email_address=$1 LIMIT 1;',
-    values: [email]
-  }
-
-  const select = await db.query(query1)
-  if(select.rowCount && select.rowCount > 0) {
-    res.status(400).json({message: "Email already exists, please try logging in"})
-    return
-  }
+router.post('/', async (req, res, next) => {
 
   try {  
+    const payload = req.body;
+    const result = signUpSchema.safeParse(payload)
+    if(!result.success) {
+      throw result.error
+    }
+
+    const {name, email, password} = result.data
+
+    const query1 = {
+      text: 'SELECT email_address FROM users WHERE email_address=$1 LIMIT 1;',
+      values: [email]
+    }
+
+    const select = await db.query(query1)
+    if(select.rowCount && select.rowCount > 0) {
+      throw new ApiError({
+        code: "conflict",
+        message: "Email already exists",
+        fieldErrors: {
+          "email": ["Email already exists"]
+        }
+      })
+    }
+
     await db.query({text: 'BEGIN;'})
 
     const passwordHashed = await hashPassword(password)
@@ -40,16 +45,17 @@ router.post('/', async (req, res) => {
     const insert = await db.query(query2);
     const userId = insert.rows[0].id
     const token = signJwt({userId, name, email})
-    res.status(201).json({message: "user created successfully", token})
-
+    res.status(201).json({
+      message: "user created successfully",
+      token
+      })
     await db.query({text: 'COMMIT'})
   }
 
   catch(err) {
     await db.query({text: 'ROLLBACK;'})
     console.log("signup error", err)
-    res.status(500).json({message: "failed to signup"})
-    return
+    next(err)
   }
 })
 
