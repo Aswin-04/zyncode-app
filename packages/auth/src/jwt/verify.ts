@@ -7,8 +7,7 @@ const verifyJwt = (token: string) : jwt.JwtPayload | string => {
   } 
 
   catch(err) {
-    console.log("JWT verify error", err)
-    throw new Error("Failed to verify JWT")
+    throw new Error("Invalid or expired token")
   }
 }
 
