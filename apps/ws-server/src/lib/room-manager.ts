@@ -27,8 +27,7 @@ class RoomManager {
       console.error("no user_id or client id: from addToRoom()")
       return
     }
-    const userId = client.userId
-
+ 
     // client -> solo-client
     if(!client.roomId) {
       client.roomId = newRoomId
@@ -183,6 +182,7 @@ class RoomManager {
     this.userRooms[userId] = roomId
   }
 
+
   leaveRoom = (client: WebSocket) => {
     if(!client.userId) {
       console.error("leave room: no user")
@@ -226,6 +226,30 @@ class RoomManager {
     
     if(this.rooms[roomId]?.size == 0) delete this.rooms[roomId]
   }
+
+  handleDisconnect = (client: WebSocket) => {
+    if(!client.userId) {
+      console.error("no user id: handleDisconnect")
+      return
+    }
+
+    if(!client.roomId) {
+      console.error('no room id: handleDisconnect')
+      return
+    }
+
+    const userId = client.userId
+    const roomId = client.roomId
+
+    this.rooms[roomId]?.delete(client)
+    this.userConnections[userId]?.delete(client)
+
+    if(this.rooms[roomId]?.size === 0) delete this.rooms[roomId]
+    if(this.userConnections[userId]?.size === 0) {
+      delete this.userConnections[userId]
+      delete this.userRooms[userId]
+    }
+  } 
 }
 
 export default RoomManager
