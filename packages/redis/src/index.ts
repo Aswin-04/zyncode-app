@@ -1,30 +1,46 @@
 import { createClient, RedisClientType } from "redis";
 import "dotenv/config"
 
-const redisClient:RedisClientType = createClient({
-  url: process.env.REDIS_URL || "" 
-})
+let redisClient: RedisClientType | null = null
 
-redisClient.on('error', (err) => {
-  console.log('redis error', err)
-})
+export async function getRedisClient() {
 
-redisClient.on('connect', () => {
-  console.log('redis connected')
-})
+  if(redisClient && redisClient.isOpen) {
+    return redisClient
+  }
 
-redisClient.on('reconnecting', () => {
-  console.log('redisClient reconnecting')
-})
+  redisClient = createClient({
+    url: process.env.REDIS_URL || "" ,   
+    
+  })
+  
+  redisClient.on('error', (err) => {
+    console.log('redis error', err)
+  })
+  
+  redisClient.on('connect', () => {
+    console.log('redis connected')
+  })
+  
+  redisClient.on('reconnecting', () => {
+    console.log('redisClient reconnecting')
+  })
+  
+  redisClient.on('end', () => {
+    console.log('redis connection closed')
+  })
+  
+  try {
+    await redisClient.connect()
+  }
+  catch(err) {
+    console.error('Error connecting to redis', err)
+    throw err
+  }
 
-redisClient.on('end', () => {
-  console.log('redis connection closed')
-})
+  return redisClient
+}
 
 
-redisClient.connect()
-  .then(() => console.log('Redis connected'))
-  .catch((err) => console.log('Failed to connect to redis', err))
 
-export default redisClient 
   
