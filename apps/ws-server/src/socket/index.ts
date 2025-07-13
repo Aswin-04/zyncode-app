@@ -1,9 +1,10 @@
 import "dotenv/config";
 import { Server } from 'http'
-import { verifyJwt } from "@repo/auth";
 import {WebSocket,  WebSocketServer } from "ws";
 import RoomManager from "../lib/room-manager";
 import { WSClientRequest } from "../types/types"
+import * as cookie from 'cookie'
+import { getRedisClient } from "@repo/redis";
 
   const HEARTBEAT_INTERVAL = 1000 * 10  // 10 sec
   const HEARTBEAT_VALUE = 1
@@ -17,13 +18,21 @@ export default function configureWebSocketServer(server: Server) {
   const wss = new WebSocketServer({ noServer: true });
   const roomManager = new RoomManager();
   
-  server.on("upgrade", (req, socket, head) => {
-    let user;
+  server.on("upgrade", async (req, socket, head) => {
+    let userId;
     try {
-      const url = new URL(req?.url as string, `http://${req.headers.host}`);
-      const token = url.searchParams.get("token");
-      if (!token) throw new Error("Missing token");
-      user = verifyJwt(token);
+      const cookies = cookie.parse(req.headers.cookie || '')
+      const sessionToken = cookies.sessionToken
+      if(!sessionToken) throw new Error('Unauthorized user, invalid session token')
+      console.log(sessionToken)
+      
+      const redis = await getRedisClient()
+      const data = await redis.get(`session:${sessionToken}`)
+      if(!data) throw new Error('Unauthorized user, session expired')
+      const user = JSON.parse(data) 
+      console.log(user)
+      userId = user.userId
+
     } catch (err: any) {
       console.error("WebSocket Auth Failed:", err.message);
       socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
@@ -31,10 +40,10 @@ export default function configureWebSocketServer(server: Server) {
       return;
     }
 
-    console.log("WebSocket Auth Success, (user):", user);
+    console.log("WebSocket Auth Success, (user):", userId);
 
     wss.handleUpgrade(req, socket, head, (ws: WebSocket, req) => {
-      ws.userId = (user as any).userId || ""
+      ws.userId = userId
       wss.emit("connection", ws, req);
     });
   });
