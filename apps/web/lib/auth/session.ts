@@ -1,6 +1,12 @@
+'use server'
+
 import crypto from 'crypto'
 import {getRedisClient} from '@repo/redis'
 import { cookies } from 'next/headers'
+import { UserSession, UserSessionResult } from './types'
+import { cache } from 'react'
+import { redirect } from 'next/navigation'
+import { revalidatePath } from 'next/cache'
 
 const COOKIE_SESSION_KEY = 'sessionToken'
 const SESSION_EXPIRATION_SECONDS = 60 * 60 * 24 * 7
@@ -36,7 +42,7 @@ export async function createUserSession({
   }
 }
 
-export async function removeUserSession() {
+export async function revokeUserSession() {
 
   try {
     const cookieStore = await cookies()
@@ -45,6 +51,7 @@ export async function removeUserSession() {
     
     await redis.del(`session:${sessionToken}`)
     cookieStore.delete(COOKIE_SESSION_KEY) 
+    redirect('/')
   }
 
   catch(err) {
@@ -53,19 +60,23 @@ export async function removeUserSession() {
   }
 }
 
-export async function getUserSession() {
+export const getCurrentUser = cache(async function (): Promise<UserSessionResult> {
 
   try {
     const cookieStore = await cookies()
     const redis = await getRedisClient()
     const sessionToken = cookieStore.get(COOKIE_SESSION_KEY)?.value
     const data = await redis.get(`session:${sessionToken}`)
-    if(!data) return null
-    return JSON.parse(data)
+    if(!data) return {status: "unauthorized", user: null, }
+    const user: UserSession = JSON.parse(data)
+    return {status: "authorized", user: user}
   }
   
   catch(err) {
     console.error('from getUserSession', err)
-    throw err 
+    return {status: "error", user: null}
   }
-} 
+}) 
+
+
+

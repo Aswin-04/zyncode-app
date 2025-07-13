@@ -12,3 +12,16 @@ export type signupActionState = {
   } 
   message?: string[]
 } 
+
+
+export interface UserSession {
+  id: string, 
+  name: string,
+  email: string,
+} 
+
+
+export type UserSessionResult = 
+  | {status: "authorized", user: UserSession}
+  | {status: "unauthorized", user: null}
+  | {status: "error", user: null}

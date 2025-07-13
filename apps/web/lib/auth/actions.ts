@@ -4,7 +4,7 @@ import { z } from "zod/v4";
 import { signupActionState } from "./types";
 import { signinSchema, signupSchema } from "./schema";
 import { comparePasswords, generateSalt, hashPassword } from "./hash";
-import { createUserSession, removeUserSession } from './session';
+import { createUserSession, revokeUserSession } from './session';
 
 export async function signupAction(
   _prevState: signupActionState,
@@ -32,7 +32,7 @@ export async function signupAction(
     const salt = generateSalt()
     const hashedPassword = await hashPassword(password, salt)
   
-    const res = await db.query({
+    const data = await db.query({
       text: `
         INSERT INTO users(
           name, 
@@ -45,22 +45,41 @@ export async function signupAction(
       values: [name, email, hashedPassword, salt]
     })
   
-    const userId = res.rows[0].id
+    const userId = data.rows[0].id
     await createUserSession({userId, name, email})
     await db.query({text: 'COMMIT'})
+      
+    return {
+      success: true,
+      message: ['Account created successfully']
+    }
   } 
   
   catch(err: any) {
-    await db.query({text: 'ROLLBACK'})
+    try {
+      await db.query({text: 'ROLLBACK'})
+    } 
+
+    catch(dbErr) {
+      console.log('db is down', dbErr)
+      return { success: false, errors: { submissionError: ['Something went wrong. Please try again shortly.']}}
+    }
+
     if(err.code === 'ECONNREFUSED') {
       return { success: false, errors: { submissionError: ['Something went wrong. Please try again shortly.']}}
     }
-    return { success: false, errors: { submissionError: ['An account with this email already exists. Try logging in instead.']}}
-  }
-  
-  return {
-    success: true,
-    message: ['Account created successfully']
+
+    if(err.code === '23505') {
+      return { success: false, errors: { submissionError: ['An account with this email already exists. Try logging in instead.']}}
+    }
+
+    console.error('Unexpected error in signup:', err)
+    return {
+      success: false,
+      errors: {
+        submissionError: ['Something went wrong. Please try again shortly.'],
+      }
+    }
   }
 }
 
@@ -83,22 +102,22 @@ export async function signinAction(
   }
 
   try {
-    const res = await db.query({
+    const data = await db.query({
       text: `SELECT id, name, password_hashed, password_salt FROM users WHERE email_address=$1;`,
       values: [email]
     })
     
-    if(res.rowCount === 0) return {success: false, email, password, errors: {email: ["This email address doesn't exist"]}}
-    const salt = res.rows[0].password_salt as string
-    const hashedPassword = res.rows[0].password_hashed as string
+    if(data.rowCount === 0) return {success: false, email, password, errors: {email: ["This email address doesn't exist"]}}
+    const salt = data.rows[0].password_salt as string
+    const hashedPassword = data.rows[0].password_hashed as string
     const isValidPassword = await comparePasswords({inputPassword: password, salt: salt, hashedPassword: hashedPassword})
     
     if(!isValidPassword) {
       return {success: false, email, password, errors: { password: ['Password is incorrect']}}
     }
     
-    const userId = res.rows[0].id as string
-    const name = res.rows[0].name as string
+    const userId = data.rows[0].id as string
+    const name = data.rows[0].name as string
     
     await createUserSession({userId, name, email})
     return {success: true, message: ['Login successful']}
@@ -112,7 +131,7 @@ export async function signinAction(
 
 export async function logoutAction() {
   try {
-    await removeUserSession()
+    await revokeUserSession()
     return {
       success: true,
       message: ['You have been logged out successfully']
