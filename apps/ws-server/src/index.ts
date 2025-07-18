@@ -3,7 +3,7 @@ import "dotenv/config";
 import configureWebSocketServer from "./socket";
 
 
-const PORT = process.env.PORT || 3002;
+const PORT = process.env.PORT || 8080;
 const app = express();
 
 const server = app.listen(PORT, () => {
