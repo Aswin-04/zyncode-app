@@ -3,14 +3,20 @@ import "dotenv/config"
 
 let redisClient: RedisClientType | null = null
 
-export async function getRedisClient() {
+export async function getRedisClient(): Promise<RedisClientType> {
+
+  const redisUrl = process.env.REDIS_URL
+
+  if(!redisUrl) {
+    throw new Error('REDIS_URL is not defined in env')
+  }
 
   if(redisClient && redisClient.isOpen) {
     return redisClient
   }
 
   redisClient = createClient({
-    url: process.env.REDIS_URL || "" ,   
+    url: redisUrl  
     
   })
   
