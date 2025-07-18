@@ -5,7 +5,7 @@ import Editor, { OnChange } from '@monaco-editor/react'
 import { useEffect, useRef, useState } from 'react'
 import { WSClientRequest, WSResponse} from "@repo/shared/types"
 
-const isBinary = (message: any) => {
+const isBinary = (message: unknown): message is Blob => {
   return typeof message === 'object' && Object.prototype.toString.call(message) === '[object Blob]' && message instanceof Blob
 }
 
@@ -17,7 +17,7 @@ const CodeEditor = () => {
   const onChangeHandler:OnChange = (latestCode: string | undefined) => {
     if(timeoutRef.current) clearTimeout(timeoutRef.current)
 
-    if(latestCode ===undefined || !ws) return
+    if(latestCode === undefined || !ws) return
 
     timeoutRef.current = setTimeout(() => {
       const payload: WSClientRequest = {
@@ -31,9 +31,9 @@ const CodeEditor = () => {
   }
 
   useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
+    const handleMessage = (event: MessageEvent<unknown>) => {
       if(isBinary(event.data)) return
-      const message: WSResponse<{latestCode: string}>  = JSON.parse(event.data)
+      const message: WSResponse<{latestCode: string}>  = JSON.parse(event.data as string)
       if(!message.success) {
         console.log(message.error.message)
         return

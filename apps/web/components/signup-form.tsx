@@ -23,7 +23,7 @@ export function SignupForm({
     if(state?.errors?.submissionError) {
       toast(state?.errors?.submissionError, {position: 'top-center', duration: 2000})
     }
-  }, [state?.errors?.submissionError, state?.message])
+  }, [state.success, state.errors?.submissionError, state.message])
   return (
     <form
       action={action}

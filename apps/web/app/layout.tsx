@@ -6,6 +6,8 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { CurrentUserProvider } from "@/lib/providers/current-user";
 import { WebSocketProvider } from "@/lib/providers/web-socket";
 
+export const dynamic = 'force-dynamic';
+
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],

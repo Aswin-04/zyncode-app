@@ -23,7 +23,7 @@ export function LoginForm({
     if(state.errors?.submissionError) {
       toast(state.errors.submissionError[0])
     }
-  }, [state?.success, state?.errors?.submissionError])
+  }, [state.success, state.message,  state.errors?.submissionError])
 
   return (
     <form

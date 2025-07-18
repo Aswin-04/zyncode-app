@@ -27,10 +27,11 @@ export const WebSocketProvider = ({children}: {children: React.ReactNode} )  => 
 
   const [ws, setWs] = useState<WebSocketExt | null>(null)
     
-    const WEBSOCKET_URL = process.env.NEXT_PUBLIC_WEBSOCKET_URL
-    if(!WEBSOCKET_URL) throw new Error('Failed to load env secretes')
-    
-    useEffect(() => {
+  
+  useEffect(() => {
+      const WEBSOCKET_URL = process.env.NEXT_PUBLIC_WEBSOCKET_URL
+      if(!WEBSOCKET_URL) throw new Error('Failed to load env secretes')
+  
       if(!user) return
       const ws = new WebSocket(WEBSOCKET_URL) as WebSocketExt
       if(!ws) {

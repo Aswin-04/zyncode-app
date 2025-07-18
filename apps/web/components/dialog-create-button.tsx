@@ -1,10 +1,9 @@
-import React, { useState } from 'react'
+import React from 'react'
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
   DialogClose,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,

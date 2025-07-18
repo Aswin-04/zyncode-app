@@ -13,7 +13,7 @@ import { logoutAction } from "@/lib/auth/actions";
 import DialogLeaveButton from "./dialog-leave-button";
 
   
-const isBinary = (message: any) => {
+const isBinary = (message: unknown): message is Blob => {
   return typeof message === 'object' && Object.prototype.toString.call(message) === '[object Blob]' && message instanceof Blob
 }
 
@@ -25,7 +25,7 @@ const Header = () => {
     const [state, action] = useActionState(logoutAction, undefined)
 
     useEffect(() => {
-      if(state?.success || state?.success == false) {
+      if(state?.success == true || state?.success == false) {
         window.location.href = '/'
       }
 
@@ -65,7 +65,7 @@ const Header = () => {
             return;
         }
       }
-      ws?.addEventListener('message', handleMessage)
+      ws.addEventListener('message', handleMessage)
 
       return () => {
         if(ws) ws.removeEventListener('message', handleMessage)
