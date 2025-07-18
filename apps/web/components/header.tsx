@@ -76,17 +76,19 @@ const Header = () => {
       <div className=" border-b-1">
         <div className="max-w-[1440px] mx-auto flex justify-between py-4 px-10">
           <div className="text-2xl font-semibold">Zyncode</div>
-          <div className="flex gap-8">
-            {!roomId && <div className="flex gap-4">
+          <div className="flex gap-16">
+            {!roomId && 
+            <div className="flex gap-4">
               <DialogCreateButton user={user} ws={ws} ></DialogCreateButton>
               <DialogJoinButton user={user} ws={ws}></DialogJoinButton>
             </div>}
-            {roomId && <div className="flex gap-4">
-              <div className="text-lg font-medium text-blue-500 mr-10">Room id: {roomId}</div>
+            {roomId && 
+            <div className="flex justify-center items-center gap-4">
+              <div className="flex justify-center items-center"><span className="text-black bg-white/80 border-1 px-4 py-2 rounded-sm" >Room Id</span> <span className="text-lg font-medium text-blue-500 border-1 px-8 py-2 rounded-sm bg-gray-950">{roomId}</span></div>
               <DialogLeaveButton user={user} ws= {ws} roomId={roomId} ></DialogLeaveButton>
             </div>}
             {!user && (
-              <div className="flex gap-4 border-1">
+              <div className="flex gap-4">
                 <Link href={"signup"}>
                   <Button variant={"outline"}>Signup</Button>
                 </Link>
@@ -96,15 +98,15 @@ const Header = () => {
               </div>
             )}
             {user && (
-              <form action={action}>
+              <form action={action} className="flex justify-center items-center">
                 <Button type={"submit"} variant={"destructive"}>
                   Logout
                 </Button>
               </form>
             )}
             {user && 
-              <div className="flex justify-center items-center  gap-4">
-                <div className="flex justify-center items-center text-xl  w-10 h-10 rounded-full border-1 bg-blue-600">{user?.name[0]}</div>
+              <div className="flex justify-center items-center  gap-2">
+                <div className="flex justify-center items-center text-xl text-black w-10 h-10 rounded-full border-1 bg-white/80">{user?.name[0]}</div>
                 <p className="text-lg font-semibold">{user?.name}</p>
               </div>
 

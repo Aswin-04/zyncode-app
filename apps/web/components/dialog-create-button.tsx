@@ -47,10 +47,7 @@ export function DialogCreateButton({user, ws}: {user: User, ws: WebSocketExt | n
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Create room</DialogTitle>
-          <DialogDescription>
-            Are you sure?
-          </DialogDescription>
+          <DialogTitle>Are you sure?</DialogTitle>
         </DialogHeader>
         <DialogFooter className="sm:justify-start">
           <DialogClose asChild>

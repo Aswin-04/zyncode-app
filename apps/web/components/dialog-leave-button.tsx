@@ -52,9 +52,6 @@ export function DialogLeaveButton({user, ws, roomId}: {user: User, ws: WebSocket
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Are you sure?</DialogTitle>
-          <DialogDescription>
-            Enter a valid room id
-          </DialogDescription>
         </DialogHeader>
 
         <DialogFooter className="sm:justify-start">
