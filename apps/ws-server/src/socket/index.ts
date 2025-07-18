@@ -2,7 +2,7 @@ import "dotenv/config";
 import { Server } from 'http'
 import {WebSocket,  WebSocketServer } from "ws";
 import RoomManager from "../lib/room-manager";
-import { WSClientRequest } from "../types/types"
+import { WSClientRequest } from "@repo/shared/types"
 import * as cookie from 'cookie'
 import { getRedisClient } from "@repo/redis";
 
@@ -87,6 +87,7 @@ export default function configureWebSocketServer(server: Server) {
           break;
 
         case "codeChange":
+          roomManager.handleCodeChange(ws, request.payload.code)
           break;
 
         default:

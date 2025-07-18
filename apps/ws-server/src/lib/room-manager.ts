@@ -1,6 +1,6 @@
 import { WebSocket } from "ws";
 import { generateRoomId } from "./room-id-generator";
-import { WSResponse } from "../types/types";
+import {  WSResponse } from "@repo/shared/types";
 
 type Rooms = Record<string, Set<WebSocket>>
 type UserConnections = Record<string, Set<WebSocket>>
@@ -66,6 +66,18 @@ class RoomManager {
       const roomId = this.userRooms[userId]
       client.roomId = roomId
       this.rooms[roomId]?.add(client)
+
+      const response: WSResponse<{roomId: string, message: string}> = {
+        type: "response",
+        eventType: "room:join",
+        success: true,
+        data: {
+          roomId,
+          message: `joined room: ${roomId} successfully`
+        }
+      }
+
+      client.send(JSON.stringify(response))
     }
 
     else {
@@ -250,6 +262,40 @@ class RoomManager {
       delete this.userRooms[userId]
     }
   } 
+
+  handleCodeChange = (client: WebSocket, code: string) => {
+
+    if(!client.userId) {
+      console.error("no user id: handleCodeChange")
+      return
+    }
+
+    if(!client.roomId) {
+      console.error('no room id: handleCodeChange')
+      return
+    }
+
+    const roomId = client.roomId
+
+    if(!this.rooms[roomId]) {
+      console.error('there are no rooms with this roomId: handleCodeChange')
+      return
+    }
+
+    const response: WSResponse<{latestCode: string}> = {
+      type: "response",
+      eventType: "room:codeChange",
+      success: true,
+      data: {
+        latestCode: code
+      }
+    }
+    this.rooms[roomId].forEach((ws: WebSocket) => {
+      if(ws != client && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify(response))
+      }
+    })
+  }
 }
 
 export default RoomManager

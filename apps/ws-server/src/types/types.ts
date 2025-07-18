@@ -22,7 +22,6 @@ interface CodeChangePayload {
     roomId: string,
     code: string
   }
-
 }
 
 interface BaseResponse {
@@ -45,4 +44,5 @@ interface ErrorResponse extends BaseResponse {
 
 export type WSClientRequest = | CreateRoomPayload | JoinRoomPayload | LeaveRoomPayload | CodeChangePayload
 export type WSResponse<T=any> = SuccessResponse<T> | ErrorResponse
+
 

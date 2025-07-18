@@ -12,7 +12,8 @@
   "license": "ISC",
   "devDependencies": {
     "@repo/auth": "workspace:*",
-    "@repo/typescript-config": "workspace:*"
+    "@repo/typescript-config": "workspace:*",
+    "@repo/shared": "workspace:*"
   },
   "packageManager": "pnpm@10.12.4",
   "dependencies": {

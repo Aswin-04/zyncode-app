@@ -3,7 +3,7 @@
   "compilerOptions": {
     "rootDir": "src",
     "outDir": "dist",
-    "typeRoots": ["./src/types", "./node_modules/@types"]
+    "typeRoots": ["./src/types", "./node_modules/@types", "./node_modules/@repo/shared/types"]
   },
   "include": ["src"],
   "exclude": ["node_modules", "dist"]
