@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, use, useState } from "react";
+import { createContext, use } from "react";
 
 interface User {
   id: string, 
@@ -21,7 +21,7 @@ export const CurrentUserProvider = ({currentUser, children}: {
 export const useCurrentUser = () => {
   const currentUser = use(CurrentUserContext)
   if(currentUser === undefined) {
-    throw new Error('useSession must be used within SessionProvider')
+    throw new Error('useCurrentUser must be used within SessionProvider')
   }
   return currentUser
 }

@@ -3,8 +3,8 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "sonner";
 import { getCurrentUser } from "@/lib/auth/session";
-import { CurrentUserProvider } from "@/lib/auth/context";
-import Header from "@/components/header";
+import { CurrentUserProvider } from "@/lib/providers/current-user";
+import { WebSocketProvider } from "@/lib/providers/web-socket";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -26,22 +26,22 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-
-  const {status, user} = await getCurrentUser()
-  if(status === 'error') {
-    throw new Error()
+  const { status, user } = await getCurrentUser();
+  if (status === "error") {
+    throw new Error();
   }
-  
+
   return (
     <html lang="en" className="dark">
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <CurrentUserProvider currentUser={user}>
-          <Header></Header>
-          <main>{children}</main>
+          <WebSocketProvider>
+            <main>{children}</main>
+          </WebSocketProvider>
         </CurrentUserProvider>
-        <Toaster/>
+        <Toaster />
       </body>
     </html>
   );

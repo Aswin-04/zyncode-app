@@ -6,10 +6,10 @@ import { cookies } from 'next/headers'
 import { UserSession, UserSessionResult } from './types'
 import { cache } from 'react'
 import { redirect } from 'next/navigation'
-import { revalidatePath } from 'next/cache'
 
-const COOKIE_SESSION_KEY = 'sessionToken'
-const SESSION_EXPIRATION_SECONDS = 60 * 60 * 24 * 7
+const COOKIE_SESSION_KEY = process.env.COOKIE_SESSION_KEY ?? "0"
+const SESSION_EXPIRATION_SECONDS = parseInt(process.env.SESSION_EXPIRATION_SECONDS || '604800', 10)
+
 
 export async function createUserSession({
   userId, 
@@ -51,7 +51,6 @@ export async function revokeUserSession() {
     
     await redis.del(`session:${sessionToken}`)
     cookieStore.delete(COOKIE_SESSION_KEY) 
-    redirect('/')
   }
 
   catch(err) {

@@ -141,7 +141,7 @@ export async function logoutAction() {
   catch(err) {
     return {
       success: false,
-      message: 'Something went wrong, please try again shortly'
+      message: ['Something went wrong, please try again shortly']
     }
   }
 }
