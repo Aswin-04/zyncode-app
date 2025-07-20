@@ -31,7 +31,8 @@ export async function createUserSession({
     const cookieStore = await cookies()
     cookieStore.set(COOKIE_SESSION_KEY, sessionToken, {
       httpOnly: true,
-      sameSite: 'lax',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      secure: process.env.NODE_ENV === 'production' ? true : false,
       expires: Date.now() + SESSION_EXPIRATION_SECONDS * 1000 // in ms
     })
   }
