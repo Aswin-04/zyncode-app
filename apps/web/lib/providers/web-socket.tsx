@@ -30,42 +30,39 @@
     
     useEffect(() => {
         const WEBSOCKET_URL = process.env.NEXT_PUBLIC_WEBSOCKET_URL
-        if(!WEBSOCKET_URL) throw new Error('Failed to load env secretes')
+        const isProd = process.env.NODE_ENV === 'production'
+        if(isProd && !WEBSOCKET_URL) throw new Error('Failed to load env secretes')
     
         if(!user) return
-        const timeout = setTimeout(() => {
-          const ws = new WebSocket(WEBSOCKET_URL) as WebSocketExt
-          if(!ws) {
-            throw new Error('unable to connect to wss')
+        const ws = new WebSocket(`${isProd ? WEBSOCKET_URL : 'ws://localhost:8080'}?sessionToken=${user.sessionToken}`) as WebSocketExt
+        if(!ws) {
+          throw new Error('unable to connect to wss')
+        }
+
+        setWs(ws)
+
+        ws.onopen = () => {
+          heartbeat(ws)    
+          console.log('connected to wss')
+        }
+
+        ws.onclose = () => {
+          console.log('ws connection closed')
+        }
+
+        ws.onerror = (err) => {
+          console.log('Websocket err: ', err)
+        }
+
+        ws.onmessage = (event) => {
+          const message = event.data
+          if(isBinary(message)) {
+            heartbeat(ws)
           }
-  
-          setWs(ws)
-  
-          ws.onopen = () => {
-            heartbeat(ws)    
-            console.log('connected to wss')
-          }
-  
-          ws.onclose = () => {
-            console.log('ws connection closed')
-          }
-  
-          ws.onerror = (err) => {
-            console.log('Websocket err: ', err)
-          }
-  
-          ws.onmessage = (event) => {
-            const message = event.data
-            if(isBinary(message)) {
-              heartbeat(ws)
-            }
-          }
-          
-        }, 150);
+        }
 
         return () => {
-          clearTimeout(timeout)
-          ws?.close()
+          ws.close()
           setWs(null)
         }
 
