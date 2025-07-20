@@ -2,17 +2,13 @@
 
 import { createContext, use } from "react";
 
-interface User {
-  id: string, 
-  name: string, 
-  email: string
-}
+import { UserSession } from "../auth/types";
 
-const CurrentUserContext = createContext<User | null | undefined>(undefined)  
+const CurrentUserContext = createContext<UserSession | null | undefined>(undefined)  
 
 
 export const CurrentUserProvider = ({currentUser, children}: {
-  currentUser: User | null,
+  currentUser: UserSession | null,
   children: React.ReactNode
 }) => {
   return <CurrentUserContext value={currentUser}>{children}</CurrentUserContext>
