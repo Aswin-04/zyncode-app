@@ -34,7 +34,7 @@
         if(isProd && !WEBSOCKET_URL) throw new Error('Failed to load env secretes')
     
         if(!user) return
-        const ws = new WebSocket(`${isProd ? WEBSOCKET_URL : 'ws://localhost:8080'}?sessionToken=${user.sessionToken}`) as WebSocketExt
+        const ws = new WebSocket(`${isProd ? WEBSOCKET_URL : 'ws://localhost:8080'}`) as WebSocketExt
         if(!ws) {
           throw new Error('unable to connect to wss')
         }

@@ -3,10 +3,10 @@ import { Server } from 'http'
 import {WebSocket,  WebSocketServer } from "ws";
 import RoomManager from "../lib/room-manager";
 import { WSClientRequest } from "@repo/shared/types"
-import url from 'url'
+import * as cookie from 'cookie'
 import { getRedisClient } from "@repo/redis";
 
-  const HEARTBEAT_INTERVAL = 1000 * 10  // 10 sec
+  const HEARTBEAT_INTERVAL = 1000 * 10 
   const HEARTBEAT_VALUE = 1
 
   const ping = (ws: WebSocket) => {
@@ -21,8 +21,8 @@ export default function configureWebSocketServer(server: Server) {
   server.on("upgrade", async (req, socket, head) => {
     let userId;
     try {
-      const { query } = url.parse(req.url || '', true)
-      const sessionToken = query?.sessionToken as string
+      const cookies = cookie.parse(req.headers.cookie || '')
+      const sessionToken = cookies.sessionToken
       if(!sessionToken) throw new Error('Unauthorized user, invalid session token')
       console.log(sessionToken)
       
