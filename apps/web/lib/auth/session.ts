@@ -22,20 +22,21 @@ export async function createUserSession({
   const sessionToken = crypto.randomBytes(64).toString("hex").normalize()
   console.log(sessionToken)
 
-  try {
-    const redis = await getRedisClient()
-      if (!redis.isOpen) {
-      throw new Error('Redis client is not connected')
+    try {
+      const redis = await getRedisClient()
+        if (!redis.isOpen) {
+        throw new Error('Redis client is not connected')
+      }
+      await redis.set(`session:${sessionToken}`, JSON.stringify({userId, name, email, sessionToken}), {'expiration': {type: 'EX', 'value': SESSION_EXPIRATION_SECONDS}})
+      const cookieStore = await cookies()
+      cookieStore.set(COOKIE_SESSION_KEY, sessionToken, {
+        httpOnly: true,
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+        secure: process.env.NODE_ENV === 'production' ? true : false,
+        domain: process.env.NODE_ENV === 'production' ? '.aswincodes.in' : undefined,
+        expires: Date.now() + SESSION_EXPIRATION_SECONDS * 1000 // in ms
+      })
     }
-    await redis.set(`session:${sessionToken}`, JSON.stringify({userId, name, email, sessionToken}), {'expiration': {type: 'EX', 'value': SESSION_EXPIRATION_SECONDS}})
-    const cookieStore = await cookies()
-    cookieStore.set(COOKIE_SESSION_KEY, sessionToken, {
-      httpOnly: true,
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-      secure: process.env.NODE_ENV === 'production' ? true : false,
-      expires: Date.now() + SESSION_EXPIRATION_SECONDS * 1000 // in ms
-    })
-  }
 
   catch(err) {
     throw err 
