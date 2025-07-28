@@ -1,7 +1,0 @@
-# Proxy WebSocket traffic to Render
-[[redirects]]
-  from = "/ws/*"
-  to = "wss://zyncode-ws-server.onrender.com/:splat"
-  status = 200
-  force = true
-  headers = { Connection = "upgrade", Upgrade = "websocket" }
