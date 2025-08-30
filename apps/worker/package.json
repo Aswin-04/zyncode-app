@@ -4,12 +4,22 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "tsc",
+    "dev": "nodemon"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "devDependencies": {
     "@repo/typescript-config": "workspace:*"
+  },
+  "dependencies": {
+    "@repo/redis": "workspace:*",
+    "bullmq": "^5.56.9",
+    "dotenv": "^16.5.0",
+    "ioredis": "^5.7.0",
+    "nodemon": "^3.1.10",
+    "ts-node": "^10.9.2"
   }
 }
