@@ -128,7 +128,7 @@ importers:
         specifier: ^4
         version: 4.1.11
       '@types/node':
-        specifier: ^20
+        specifier: ^20.19.1
         version: 20.19.1
       '@types/pg':
         specifier: ^8.15.4
@@ -200,6 +200,9 @@ importers:
       express:
         specifier: ^5.1.0
         version: 5.1.0
+      ioredis:
+        specifier: ^5.7.0
+        version: 5.7.0
       nodemon:
         specifier: ^3.1.10
         version: 3.1.10
