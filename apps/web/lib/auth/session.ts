@@ -24,10 +24,10 @@ export async function createUserSession({
 
     try {
       const redis = await getRedisClient()
-        if (!redis.isOpen) {
-        throw new Error('Redis client is not connected')
+        if (redis.status !== "ready") {
+        throw new Error(`Redis client is not connected, ${redis.status}`)
       }
-      await redis.set(`session:${sessionToken}`, JSON.stringify({userId, name, email, sessionToken}), {'expiration': {type: 'EX', 'value': SESSION_EXPIRATION_SECONDS}})
+      await redis.set(`session:${sessionToken}`, JSON.stringify({userId, name, email, sessionToken}), "EX", SESSION_EXPIRATION_SECONDS)
       const cookieStore = await cookies()
       cookieStore.set(COOKIE_SESSION_KEY, sessionToken, {
         httpOnly: true,
