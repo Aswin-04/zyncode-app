@@ -13,10 +13,10 @@ import { getRedisClient } from "@repo/redis";
     ws.send(HEARTBEAT_VALUE, {binary: true})
   }
 
-export default function configureWebSocketServer(server: Server) {
+export default async function configureWebSocketServer(server: Server) {
 
   const wss = new WebSocketServer({ noServer: true });
-  const roomManager = new RoomManager();
+  const roomManager = await RoomManager.create();
   
   server.on("upgrade", async (req, socket, head) => {
     let userId;
