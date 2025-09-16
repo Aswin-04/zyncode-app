@@ -1,16 +1,58 @@
 import { WebSocket } from "ws";
 import { generateRoomId } from "./room-id-generator";
 import {  WSResponse } from "@repo/shared/types";
+import Redis from 'ioredis'
+import { getRedisClient, getRedisSubscriber } from "@repo/redis";
 
 type Rooms = Record<string, Set<WebSocket>>
 type UserConnections = Record<string, Set<WebSocket>>
 type UserRooms = Record<string, string>
+
+interface ExecutionResult {
+  roomId: string
+  stdout: string
+  stderr: string 
+  verdict: string
+}
 
 class RoomManager {
 
   rooms: Rooms = {}
   userConnections: UserConnections = {}
   userRooms: UserRooms = {}
+  redisSub: Redis
+  private constructor (redisSub: Redis) {
+    this.redisSub = redisSub
+    this.redisSub.psubscribe('room:*', 'solo:*', (err, count) => {
+      if(err) {
+        console.error('Failed to psubscribe', err)
+        return;
+      }
+      console.log(`Subscribed to ${count} patterns`)
+    })
+
+    this.redisSub.on('pmessage', (pattern, channel, message) => {
+      console.log(pattern, channel, message)
+      
+      const executionResult:ExecutionResult = JSON.parse(message)
+
+      const roomId = executionResult.roomId
+      if(!roomId || !this.rooms[roomId]) {
+        console.log(`Can't find ${roomId}`)
+        return 
+      }
+
+      this.rooms[roomId].forEach((client) => {
+        client.send(message)
+      })
+
+    })
+  }
+
+  static async create() {
+    const redisSub = await getRedisSubscriber()
+    return new RoomManager(redisSub)
+  }
 
   private generateUniqueRoomId = () => {
     let id 
