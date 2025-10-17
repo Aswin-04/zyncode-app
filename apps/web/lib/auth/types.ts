@@ -15,7 +15,7 @@ export type signupActionState = {
 
 
 export interface UserSession {
-  id: string, 
+  userId: string, 
   name: string,
   email: string,
   sessionToken: string
