@@ -1,342 +1,294 @@
 import { WebSocket } from "ws";
 import { generateRoomId } from "./room-id-generator";
-import {  WSResponse } from "@repo/shared/types";
+import {  WSResponse, WSEventType } from "@repo/shared/types";
 import Redis from 'ioredis'
 import { getRedisClient, getRedisSubscriber } from "@repo/redis";
 
-type Rooms = Record<string, Set<WebSocket>>
-type UserConnections = Record<string, Set<WebSocket>>
-type UserRooms = Record<string, string>
+// room:roomId --> set of userIds
+// user:userId --> roomId
 
 interface ExecutionResult {
-  roomId: string
+  username: string, 
+  stdin: string,
   stdout: string
   stderr: string 
   verdict: string
 }
 
-class RoomManager {
+const USER_KEY_PREFIX = 'user:'
+const ROOM_KEY_PREFIX = 'room:'
+const TTL = 120 * 1000  // in ms
+const FLUSH_INTERVAL = 20 * 1000 // in ms
 
-  rooms: Rooms = {}
-  userConnections: UserConnections = {}
-  userRooms: UserRooms = {}
-  redisSub: Redis
-  private constructor (redisSub: Redis) {
+class RoomManager {
+  private userConnections: Record<string, Set<WebSocket>> = {}
+  private latestRoomCode: Record<string, string> = {}
+  private roomCleanupTimers: Record<string, NodeJS.Timeout> = {}
+  private redisSub: Redis
+  private redis: Redis 
+  
+  private constructor(redisSub: Redis, redis: Redis) {
     this.redisSub = redisSub
-    this.redisSub.psubscribe('room:*', 'solo:*', (err, count) => {
+    this.redis = redis
+    this.subscribeToEvents()
+  }
+
+  static async create() {
+    const redis = await getRedisClient()
+    const redisSub = await getRedisSubscriber()
+    const roomManager = new RoomManager(redisSub, redis)
+    roomManager.persistRoomCodeToRedis()
+    return roomManager
+  }
+
+  private getRoomKey = (roomId: string) => `room:${roomId}`
+  private getUserKey = (userId: string) => `user:${userId}` 
+  private getRoomCodeKey = (roomId: string) => `room:code:${roomId}`
+
+  private subscribeToEvents = async () => {
+    await this.redisSub.psubscribe(`${USER_KEY_PREFIX}*`, `${ROOM_KEY_PREFIX}*`, (err, count) => {
       if(err) {
-        console.error('Failed to psubscribe', err)
-        return;
+        console.error("Failed to psubscribe", err)
+        return
       }
       console.log(`Subscribed to ${count} patterns`)
     })
 
-    this.redisSub.on('pmessage', (pattern, channel, message) => {
-      console.log(pattern, channel, message)
-      
-      const executionResult:ExecutionResult = JSON.parse(message)
+    this.redisSub.on("pmessage", async (pattern, channel, message) => {
+      console.log(`Message channel ${channel} (pattern: ${pattern})`)
 
-      const roomId = executionResult.roomId
-      if(!roomId || !this.rooms[roomId]) {
-        console.log(`Can't find ${roomId}`)
-        return 
+      const executionResult:ExecutionResult = JSON.parse(message)
+      console.log(executionResult)
+
+      if(channel.startsWith(`${ROOM_KEY_PREFIX}`)) {
+        const users = await this.redis.smembers(channel)
+        users.forEach(userId => this.broadcastToAll(userId, executionResult))
       }
 
-      this.rooms[roomId].forEach((client) => {
-        client.send(message)
-      })
-
+      if(channel.startsWith(`${USER_KEY_PREFIX}`)) {
+        const userId = channel.substring(USER_KEY_PREFIX.length)
+        this.broadcastToAll(userId, executionResult)
+      }
     })
   }
 
-  static async create() {
-    const redisSub = await getRedisSubscriber()
-    return new RoomManager(redisSub)
+  private broadcastToAll = (userId: string, data: object) => {
+    this.userConnections[userId]?.forEach((client) => {
+      if(client.readyState === WebSocket.OPEN) {
+        this.sendResponse(client, "execution:result", data)
+      }
+    })
   }
 
-  private generateUniqueRoomId = () => {
-    let id 
-    do {
-      id = generateRoomId()
-    } while(id in this.rooms);
-
-    return id
-  }
-
-  private addToRoom = (client: WebSocket, newRoomId: string) => {  
-    
-    if(!client.userId) {
-      console.error("no user_id or client id: from addToRoom()")
-      return
-    }
- 
-    // client -> solo-client
-    if(!client.roomId) {
-      client.roomId = newRoomId
-      this.rooms[newRoomId] = new Set([client])
-      return
+  public initializeConnection = async (client: WebSocket) => {
+    const {userId} = client
+    if(!userId) {
+      console.error('Initialize error: Websocket is missing a userId.')
+      client.close(1008, "User ID not provided")
+      return 
     }
 
-    // solo-client -> client inside a room (also delete the corresponding solo-room)
-    const soloRoomId = client.roomId
-    client.roomId = newRoomId
-    delete this.rooms[soloRoomId]
-    
-    if(!this.rooms[newRoomId]) {
-      this.rooms[newRoomId] = new Set()
+    if(!this.userConnections[userId]) {
+      this.userConnections[userId] = new Set()
     }
+    this.userConnections[userId].add(client)
+    console.log(`User ${userId} connected. Total connections: ${this.userConnections[userId].size}`)
 
-    this.rooms[newRoomId].add(client)
-  }
+    const userKey = this.getUserKey(userId)
+    const roomId = await this.redis.get(userKey)
 
-
-  initializeConnection = (client: WebSocket) => {
-    if(!client?.userId) return;
-
-    const userId = client.userId
-    
-    
-    if(!(userId in this.userConnections)) {
-      this.userConnections[userId] = new Set([client]);
+    if(roomId) {
+      await this.handleReconnect(client, roomId)
     }
     else {
-      this.userConnections[userId]?.add(client)
-    }
-
-    // if client-userId is already in a room, join this client to that same room  
-    if(this.userRooms[userId] && this.rooms[this.userRooms[userId]]) {
-      const roomId = this.userRooms[userId]
-      client.roomId = roomId
-      this.rooms[roomId]?.add(client)
-
-      const response: WSResponse<{roomId: string, message: string}> = {
-        type: "response",
-        eventType: "room:join",
-        success: true,
-        data: {
-          roomId,
-          message: `joined room: ${roomId} successfully`
-        }
-      }
-
-      client.send(JSON.stringify(response))
-    }
-
-    else {
-      this.addSoloClient(client)
+      client.roomId = undefined 
+      this.sendResponse(client, "session:init", {
+        message: "Connection successful, you are in a solo session"
+      })
     }
   }
 
-  addSoloClient = (client: WebSocket) => {
-    if(!client.userId) {
-      console.log("no user_id")
-      return
-    }
-
-    const roomId = `solo:${crypto.randomUUID()}`
-    this.addToRoom(client, roomId)
-    
-    const response: WSResponse<{roomId: string, message: string}> = {
-      type: "response",
-      eventType: "solo:init",
-      success: true,
-      data: {
-        roomId,
-        message: "connection established successfully"
-      }
-    }
-
+  private sendResponse = (client: WebSocket, eventType: WSEventType, data: object) => {
+    const response: WSResponse = {type: "response", eventType, success: true, data}
     client.send(JSON.stringify(response))
   }
 
-  createRoom = (client: WebSocket) => {
-    if(!client.userId) {
-      console.log("no user_id")
-      return
-    }
-    const userId = client.userId
-    // prevent if already in other room
-    if(this.userRooms[userId]) {  
-      console.error(`user is already in a room: ${client.userId}`)
-      return
-    }
-    const createdRoomId = this.generateUniqueRoomId()
-
-    // prevent creating room if there are no connections
-    if(!this.userConnections[userId]) {
-      console.error("create error")
-      return
-    }
-
-    // add each client in userConnections to newRoom (from solo-client -> client-in-room)
-    const response: WSResponse<{roomId: string, message: string}> = {
-      type: "response",
-      eventType: "room:create",
-      success: true,
-      data: {
-        roomId: createdRoomId,
-        message: "room created successfully"
-      }
-    }
-    for(const tabClient of this.userConnections[userId]) {
-      this.addToRoom(tabClient, createdRoomId)
-      tabClient.send(JSON.stringify(response))
-    }
-
-    this.userRooms[userId] = createdRoomId
+  private sendError = (client: WebSocket, eventType: WSEventType, message: string) => {
+    const response: WSResponse = {type: "response", eventType, success: false, error: {message}}
+    client.send(JSON.stringify(response))
   }
 
-  joinRoom = (client: WebSocket, roomId: string) => {
-    if(!client.userId) {
-      console.log("no user_id")
-      return
-    }
+  public handleDisconnect = async (client: WebSocket) => {
+    const {userId, roomId} = client 
+    if(!userId) return 
 
-    const userId = client.userId
-    
-    if(!(roomId in this.rooms)) {
-      const errorResponse: WSResponse = {
-        type: "response",
-        eventType: "room:join",
-        success: false,
-        error: {
-          message: `Invalid room_id: ${roomId}`
+    const userSockets = this.userConnections[userId]
+    if(userSockets) {
+      userSockets.delete(client)
+      if(userSockets.size === 0) {
+        delete this.userConnections[userId]
+        console.log(`All connections for user ${userId} closed.`)
+        
+        if(roomId) {
+          await this.redis.srem(this.getRoomKey(roomId), userId)
+          const roomSize = await this.redis.scard(this.getRoomKey(roomId))
+          if(roomSize == 0) this.scheduleRoomCleanup(roomId)
         }
       }
-      client.send(JSON.stringify(errorResponse))
-      return
     }
-
-    if(!this.userConnections[userId]) {
-      console.error("join error")
-      return
-    }
-
-    // prevent if already in other room
-    if(this.userRooms[userId]) {  
-      console.error(`user is already in a room: ${client.userId}`)
-      return
-    }
-    
-    const response: WSResponse<{roomId: string, message: string}> = {
-      type: "response",
-      eventType: "room:join",
-      success: true,
-      data: {
-        roomId,
-        message: `joined room: ${roomId} successfully`
-      }
-    }
-
-    for(const tabClient of this.userConnections[userId]) {
-      this.addToRoom(tabClient, roomId)
-      tabClient.send(JSON.stringify(response))
-    }
-
-    this.userRooms[userId] = roomId
   }
 
-
-  leaveRoom = (client: WebSocket) => {
-    if(!client.userId) {
-      console.error("leave room: no user")
-      return
-    }
-
-    if(!client.roomId) {
-      console.error(`leave room: roomId is undefined`)
-      return
-    }
-
-    const userId = client.userId
-    if(!this.userRooms[userId]) {
-      console.error(`leave room: player is not in any room`)
-      return
-    }
-
-    if(!this.userConnections[userId] || !this.userRooms[userId]) {
-      console.error("leave room: error")
-      return
-    }
-    const roomId = client.roomId
-
-    const response: WSResponse = {
-      type: "response",
-      eventType: "room:leave",
-      success: true,
-      data: {
-        message: `you have left the room: ${roomId} successfully`
-      }
-    }
-
-    delete this.userRooms[userId]
+  public createRoom = async (client: WebSocket) => {
+    const {userId} = client
+    if(!userId) return this.sendError(client, "room:create", "User not authenticated.")
     
-    for(const tabClient of this.userConnections[userId]) {
-      tabClient.roomId = undefined
-      this.rooms[roomId]?.delete(tabClient)
-      tabClient.send(JSON.stringify(response))
-      this.addSoloClient(tabClient)
-    }
-    
-    if(this.rooms[roomId]?.size == 0) delete this.rooms[roomId]
+    const newRoomId = await this.generateUniqueRoomId()
+    await this.setUserRoomState(userId, newRoomId, "room:create")
   }
 
-  handleDisconnect = (client: WebSocket) => {
-    if(!client.userId) {
-      console.error("no user id: handleDisconnect")
-      return
+  public joinRoom = async (client: WebSocket, roomIdToJoin: string) => {
+    console.log(roomIdToJoin)
+    const {userId} = client
+    if(!userId) return this.sendError(client, "room:join", "User not authenticated.")
+
+    const roomKey = this.getRoomKey(roomIdToJoin)
+    if(!(await this.redis.exists(roomKey))) {
+      this.sendError(client, "room:join", `Room with ID '${roomIdToJoin}' does not exist.`)
     }
+    await this.setUserRoomState(userId, roomIdToJoin, "room:join")    
+  }
 
-    if(!client.roomId) {
-      console.error('no room id: handleDisconnect')
-      return
-    }
+  public leaveRoom = async (client: WebSocket) => {
+    const {userId, roomId} = client 
+    if(!userId || !roomId) return this.sendError(client, "room:leave", "You are not currently in a room")
+    
+    const pipeline = this.redis.pipeline()
+    pipeline.srem(this.getRoomKey(roomId), userId)
+    pipeline.del(this.getUserKey(userId))
+    pipeline.del(this.getRoomCodeKey(roomId))
+    await pipeline.exec()
 
-    const userId = client.userId
-    const roomId = client.roomId
+    delete this.latestRoomCode[roomId]
 
-    this.rooms[roomId]?.delete(client)
-    this.userConnections[userId]?.delete(client)
-
-    if(this.rooms[roomId]?.size === 0) delete this.rooms[roomId]
-    if(this.userConnections[userId]?.size === 0) {
-      delete this.userConnections[userId]
-      delete this.userRooms[userId]
-    }
-  } 
-
-  handleCodeChange = (client: WebSocket, code: string) => {
-
-    if(!client.userId) {
-      console.error("no user id: handleCodeChange")
-      return
-    }
-
-    if(!client.roomId) {
-      console.error('no room id: handleCodeChange')
-      return
-    }
-
-    const roomId = client.roomId
-
-    if(!this.rooms[roomId]) {
-      console.error('there are no rooms with this roomId: handleCodeChange')
-      return
-    }
-
-    const response: WSResponse<{latestCode: string}> = {
-      type: "response",
-      eventType: "room:codeChange",
-      success: true,
-      data: {
-        latestCode: code
-      }
-    }
-    this.rooms[roomId].forEach((ws: WebSocket) => {
-      if(ws != client && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify(response))
-      }
+    this.userConnections[userId]?.forEach((conn) => {
+      conn.roomId = undefined 
+      this.sendResponse(conn, "room:leave", {roomId, message: `You have successfully left room: ${roomId}.` })
     })
+    }
+
+  public handleCodeChange = async (client: WebSocket, latestCode: string) => {
+    const {userId, roomId} = client 
+    if(!userId || !roomId) return
+
+    this.latestRoomCode[roomId] = latestCode
+
+    const usersInRoom = await this.redis.smembers(this.getRoomKey(roomId))
+    usersInRoom.forEach((userId) => {
+      this.userConnections[userId]?.forEach((conn) => {
+        if(conn != client && conn.readyState === WebSocket.OPEN) {
+          this.sendResponse(conn, "room:code-update", {latestCode})
+        }
+      })
+    })
+  }
+
+  private generateUniqueRoomId = async () => {
+    let roomId: string 
+    do {
+      roomId = generateRoomId()
+    } while(await this.redis.exists(this.getRoomKey(roomId)))
+    
+    return roomId
+  }
+
+  private setUserRoomState = async (userId: string, newRoomId: string, eventType: "room:create" | "room:join") => {
+    const pipeline = this.redis.pipeline()
+    pipeline.sadd(this.getRoomKey(newRoomId), userId)
+    pipeline.set(this.getUserKey(userId), newRoomId)
+    await pipeline.exec()
+
+    const message = eventType == "room:create" ? "Room created successfully." : "Joined room successfully."
+    const latestCode = await this.getLatestRoomCode(newRoomId)
+    this.userConnections[userId]?.forEach(client => {
+      client.roomId = newRoomId
+      this.sendResponse(client, eventType, {roomId: newRoomId, latestCode, message})
+    })
+  }
+
+  private getLatestRoomCode = async(roomId: string) => {
+    let latestCode = this.latestRoomCode[roomId] || ""
+    if(!latestCode) {
+      latestCode = await this.redis.get(this.getRoomCodeKey(roomId)) || ""
+    }
+    return latestCode
+  }
+
+  private scheduleRoomCleanup = (roomId: string) => {
+    if(roomId in this.roomCleanupTimers) {
+      clearTimeout(this.roomCleanupTimers[roomId])
+    }
+
+    const timeout = setTimeout(async () => {
+      const pipeline = this.redis.pipeline()
+      pipeline.del(this.getRoomKey(roomId))
+      pipeline.del(this.getRoomCodeKey(roomId))
+      await pipeline.exec()
+
+      delete this.latestRoomCode[roomId]
+      delete this.roomCleanupTimers[roomId]
+
+      console.log(`Room ${roomId} cleaned up after TTL`)      
+    }, TTL)
+
+    this.roomCleanupTimers[roomId] = timeout
+  }
+
+  private cancelRoomCleanup = (roomId: string) => {
+    if(roomId in this.roomCleanupTimers) {
+      clearTimeout(this.roomCleanupTimers[roomId])
+      delete this.roomCleanupTimers[roomId]
+    }
+  }
+
+  private persistRoomCodeToRedis = () => {
+    setInterval(async () => {
+      const roomIds = Object.keys(this.latestRoomCode)
+      if(roomIds.length === 0) return 
+      const pipeline = this.redis.pipeline()
+      roomIds.forEach(async (roomId) => {
+        if(!(roomId in this.latestRoomCode)) return 
+        const latestCode = this.latestRoomCode[roomId] || ""
+        if(latestCode) pipeline.set(this.getRoomCodeKey(roomId), latestCode)
+      })
+
+      try {
+        await pipeline.exec()
+      }
+
+      catch(err) {
+        console.error("Error flushing latestRoomCode to Redis:", err)
+      }
+    }, FLUSH_INTERVAL)
+  }
+
+  private handleReconnect = async (client: WebSocket, roomId: string) => {
+      const { userId } = client
+      if (!userId || !roomId) return
+
+      client.roomId = roomId 
+      this.cancelRoomCleanup(roomId)
+
+      const pipeline = this.redis.pipeline()
+      pipeline.sadd(this.getRoomKey(roomId), userId)
+      pipeline.set(this.getUserKey(userId), roomId)
+      await pipeline.exec()
+
+      const latestCode = await this.getLatestRoomCode(roomId)
+      this.sendResponse(client, "room:join", {
+        roomId,
+        latestCode,
+        message: `Reconnected to room ${roomId}`
+      })
   }
 }
 

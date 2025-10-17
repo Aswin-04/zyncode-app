@@ -61,8 +61,6 @@ export default async function configureWebSocketServer(server: Server) {
   wss.on("connection", (ws: WebSocket, req) => {
     ws.isAlive = true
     roomManager.initializeConnection(ws);
-    const obj = Object.entries(roomManager.rooms)
-    console.log(obj)
 
     ws.on("message", (data, isBinary) => {
 
@@ -94,16 +92,11 @@ export default async function configureWebSocketServer(server: Server) {
           console.error(`Invalid request type ${(request as any).type}`);
           break;
       }
-
-      const obj = Object.entries(roomManager.rooms)
-      console.log(obj)
     });
 
     ws.on('close', () => {
       console.log('Connection closed');
       roomManager.handleDisconnect(ws)
-      const obj = Object.entries(roomManager.rooms)
-      console.log(obj)
     });
   });
   

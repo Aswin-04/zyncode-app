@@ -13,7 +13,7 @@ function generateRoomId() {
       generatedId += getRandomCharTriplet();
       if(i!=3) generatedId+='-';
     }
-    return `room:${generatedId}` 
+    return generatedId
 }
 
 export {
