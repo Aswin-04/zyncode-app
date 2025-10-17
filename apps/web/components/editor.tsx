@@ -2,22 +2,30 @@
 
 import { useWebSocket } from '@/lib/providers/web-socket'
 import Editor, { OnChange } from '@monaco-editor/react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, memo } from 'react'
 import { WSClientRequest, WSResponse} from "@repo/shared/types"
+
+interface CodeEditorProps {
+  code: string, 
+  setCode: (latestCode: string) => void
+}
 
 const isBinary = (message: unknown): message is Blob => {
   return typeof message === 'object' && Object.prototype.toString.call(message) === '[object Blob]' && message instanceof Blob
 }
 
-const CodeEditor = () => {
-  const { ws } =  useWebSocket()
-  const [code, setCode] = useState<string>('')
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null)
-  
+const CodeEditor = ({code, setCode}: CodeEditorProps) => {
+
+    const { ws } =  useWebSocket()
+    const timeoutRef = useRef<NodeJS.Timeout | null>(null)
+    
+
   const onChangeHandler:OnChange = (latestCode: string | undefined) => {
     if(timeoutRef.current) clearTimeout(timeoutRef.current)
 
     if(latestCode === undefined || !ws) return
+    
+    setCode(latestCode)
 
     timeoutRef.current = setTimeout(() => {
       const payload: WSClientRequest = {
@@ -39,7 +47,7 @@ const CodeEditor = () => {
         return
       } 
       
-      if(message.eventType === 'room:codeChange') {
+      if(message.eventType === 'room:code-update') {
         setCode(message.data.latestCode)
       }
     }
@@ -52,10 +60,8 @@ const CodeEditor = () => {
     }
 
   }, [ws])
-
-
   return (
-    <div className='max-w-3xl h-[calc(100vh-70px)] p-10 border-1'>
+    <div className='h-[calc(100vh-70px)] p-10 border-1'>
       <Editor 
         language='javascript' 
         height={'100%'} 
@@ -70,4 +76,4 @@ const CodeEditor = () => {
   )
 }
 
-export default CodeEditor
+export default memo(CodeEditor)
