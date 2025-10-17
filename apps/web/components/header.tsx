@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useActionState, useEffect, useState } from "react";
+import React, { useActionState, useEffect, useState, memo } from "react";
 import { Button } from "./ui/button";
 import { useCurrentUser } from "@/lib/providers/current-user";
 import Link from "next/link";
@@ -12,15 +12,19 @@ import DialogCreateButton from "./dialog-create-button";
 import { logoutAction } from "@/lib/auth/actions";
 import DialogLeaveButton from "./dialog-leave-button";
 
+interface RoomProps {
+  roomId: string | null, 
+  setRoomId: React.Dispatch<React.SetStateAction<string | null>>
+}
+
   
 const isBinary = (message: unknown): message is Blob => {
   return typeof message === 'object' && Object.prototype.toString.call(message) === '[object Blob]' && message instanceof Blob
 }
 
-const Header = () => {
+const Header = ({roomId, setRoomId}: RoomProps) => {
     const user = useCurrentUser();
     const { ws } = useWebSocket()
-    const [roomId, setRoomId] = useState<string | null>(null)
 
     const [state, action] = useActionState(logoutAction, undefined)
 
@@ -117,4 +121,4 @@ const Header = () => {
     );
   };
 
-  export default Header;
+  export default memo(Header);
