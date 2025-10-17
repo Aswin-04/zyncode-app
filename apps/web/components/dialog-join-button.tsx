@@ -14,13 +14,9 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { toast } from 'sonner'
 import { WSClientRequest } from '@repo/shared/types'
+import { UserSession } from '@/lib/auth/types'
 
-type User = |
-  {
-    id: string, 
-    name: string, 
-    email: string
-  } | null
+type User = UserSession | null
 
 export function DialogJoinButton({user, ws}: {user: User, ws: WebSocketExt | null}) {
 

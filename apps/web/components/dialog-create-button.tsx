@@ -11,13 +11,9 @@ import {
 } from "@/components/ui/dialog"
 import { toast } from 'sonner'
 import { WSClientRequest } from '@repo/shared/types'
+import { UserSession } from '@/lib/auth/types'
 
-type User = |
-  {
-    id: string, 
-    name: string, 
-    email: string
-  } | null
+type User = UserSession | null
 
 export function DialogCreateButton({user, ws}: {user: User, ws: WebSocketExt | null}) {
 
