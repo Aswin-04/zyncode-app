@@ -25,7 +25,7 @@ interface CodeChangePayload {
 
 interface BaseResponse {
   type: "response",
-  eventType: "room:create" | "room:join" | "room:leave" | "room:codeChange" | "room:submit" | "solo:init" | "solo:submit" 
+  eventType: WSEventType 
   success: boolean
 }
 
@@ -41,7 +41,20 @@ interface ErrorResponse extends BaseResponse {
   }
 }
 
-export type WSClientRequest = | CreateRoomPayload | JoinRoomPayload | LeaveRoomPayload | CodeChangePayload
+export type WSEventType = 
+  | "room:create"
+  | "room:join"
+  | "room:leave"
+  | "room:code-update"
+  | "session:init"
+  | "execution:result";
+
+export type WSClientRequest = 
+  | CreateRoomPayload 
+  | JoinRoomPayload 
+  | LeaveRoomPayload 
+  | CodeChangePayload
+
 export type WSResponse<T=any> = SuccessResponse<T> | ErrorResponse
 
 
