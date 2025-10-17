@@ -7,15 +7,17 @@ import 'dotenv/config'
 
 interface JobPayload {
   jobId: string,
-  roomId: string,
+  roomId: string | null,
+  userId: string,
+  username: string, 
   language: "js" | "cpp" | "c" | "java" | "py"
   code: string,
   stdin: string
 }
 
-const executeCode = (jobPayload: JobPayload): Promise<{roomId: string, stdout: string, stderr:string, verdict: string}> =>  {
+const executeCode = (jobPayload: JobPayload): Promise<{userId: string, username: string, roomId: string | null, stdin: string, stdout: string, stderr:string, verdict: string}> =>  {
   return new Promise((resolve, reject) => {
-    const {jobId, roomId, language, code, stdin} = jobPayload
+    const {jobId, userId, username, roomId, language, code, stdin} = jobPayload
     console.log(jobPayload)
   
     const jobDir = path.join(process.cwd(), 'tmp', 'jobs', jobId)
@@ -76,7 +78,7 @@ const executeCode = (jobPayload: JobPayload): Promise<{roomId: string, stdout: s
         else verdict = 'Compile/Runtime Error'
       }
       console.log(`return-code: ${code}, signal: ${signal}, verdict: ${verdict}`)
-      resolve({roomId, stdout, stderr, verdict})
+      resolve({userId, username, roomId, stdin, stdout, stderr, verdict})
     })
   
     jobContainer.on('error', (err) => {
@@ -92,9 +94,10 @@ const startWorker = async () => {
   if(!redisUrl) throw new Error("Failed to update env")
   const redis = new Redis(redisUrl, {tls: redisUrl.startsWith('rediss://') ? {} : undefined, maxRetriesPerRequest: null})
   const worker = new Worker('jobQueue', async (job: Job) => {
-    const {roomId, stdout, stderr, verdict} = await executeCode(job.data)
-    
-    await redis.publish(`${roomId}`, JSON.stringify({roomId, stdout, stderr, verdict}))
+    const {userId, username, roomId, stdin, stdout, stderr, verdict} = await executeCode(job.data)
+
+    const channel = roomId ? `room:${roomId}` : `user:${userId}`
+    await redis.publish(`${channel}`, JSON.stringify({username, stdin, stdout, stderr, verdict}))
   }, {connection: redis, removeOnComplete: {age: 0}, removeOnFail: {age: 0}})
 
   worker.on('failed', (err) => {
