@@ -9,9 +9,9 @@ export async function POST(req: NextRequest) {
   const redisQueue = new Queue('jobQueue', {connection: redis})
   const body = await req.json()
 
-  const {roomId, language, code, stdin} = body 
+  const {userId, username, roomId, language, code, stdin} = body 
   const jobId = `job-${crypto.randomUUID()}`
-  redisQueue.add('', {roomId, jobId, language, code, stdin})
+  redisQueue.add('', {userId, username, roomId, jobId, language, code, stdin})
   return new Response(
     JSON.stringify({message: "success",}), {
       status: 200
