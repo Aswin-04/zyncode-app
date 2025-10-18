@@ -3,7 +3,7 @@ import React, { createContext, use, useState } from 'react'
 
 type InputState = {
   input: string, 
-  setInput: (input: string) => void
+  setInput: React.Dispatch<React.SetStateAction<string>>
 }
 
 const InputContext = createContext<InputState | undefined>(undefined)
