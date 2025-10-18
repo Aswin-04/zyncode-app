@@ -42,6 +42,8 @@ class RoomManager {
   private getRoomKey = (roomId: string) => `room:${roomId}`
   private getUserKey = (userId: string) => `user:${userId}` 
   private getRoomCodeKey = (roomId: string) => `room:code:${roomId}`
+  private getUserInfoKey = (userId: string) => `user:info:${userId}`
+  private getRoomMetaKey = (roomId: string) => `room:meta:${roomId}`
 
   private subscribeToEvents = async () => {
     await this.redisSub.psubscribe(`${USER_KEY_PREFIX}*`, `${ROOM_KEY_PREFIX}*`, (err, count) => {
@@ -145,6 +147,10 @@ class RoomManager {
     if(!userId) return this.sendError(client, "room:create", "User not authenticated.")
     
     const newRoomId = await this.generateUniqueRoomId()
+    await this.redis.hset(this.getRoomMetaKey(newRoomId), {
+      'ownerId': userId,
+      'language': 'javascript'
+    })
     await this.setUserRoomState(userId, newRoomId, "room:create")
   }
 
@@ -183,7 +189,10 @@ class RoomManager {
   }
 
   private cleanupEmptyRoom = async (roomId: string) => {
-    await this.redis.del(this.getRoomCodeKey(roomId))
+    const pipeline = this.redis.pipeline()
+    pipeline.del(this.getRoomCodeKey(roomId))
+    pipeline.del(this.getRoomMetaKey(roomId))
+    pipeline.exec()
     delete this.latestRoomCode[roomId]
     console.log(`Cleaned up empty room ${roomId}`)
   }
@@ -202,6 +211,27 @@ class RoomManager {
         }
       })
     })
+  }
+
+  public changeLanguage = async (client: WebSocket, language: string) => {
+    const {userId, roomId} = client 
+    if(!userId || !roomId) return
+
+    const ownerId = await this.redis.hget(this.getRoomMetaKey(roomId), 'ownerId')
+    if(userId !== ownerId) {
+      this.sendError(client, 'room:language-update', '"Only the room owner can change the language.')
+    }
+
+    await this.redis.hset(this.getRoomMetaKey(roomId), 'language', language)
+
+    const usersInRoom = await this.redis.smembers(this.getRoomKey(roomId))
+    usersInRoom.forEach((userId) => {
+      this.userConnections[userId]?.forEach((conn) => {
+        if(conn.readyState === WebSocket.OPEN) {
+          this.sendResponse(conn, 'room:language-update', {language})
+        }
+      })
+    }) 
   }
 
   private generateUniqueRoomId = async () => {
@@ -240,8 +270,6 @@ class RoomManager {
     }
     return latestCode
   }
-
-
 
   private persistRoomCodeToRedis = () => {
     setInterval(async () => {
@@ -293,7 +321,6 @@ class RoomManager {
         latestCode,
         message: `Reconnected to room ${roomId}`
       })
-
       
       await this.broadcastUserJoinToast(roomId, userId)
       await this.broadcastMembersToRoom(roomId)
@@ -302,9 +329,12 @@ class RoomManager {
   private broadcastMembersToRoom = async (roomId: string) => {
     const usersInRoom = await this.redis.smembers(this.getRoomKey(roomId))
     const pipeline = this.redis.pipeline()
-    usersInRoom.forEach((userId) => pipeline.hget(`user:info:${userId}`, "username"))
+    usersInRoom.forEach((userId) => pipeline.hget(this.getUserInfoKey(userId), "username"))
     const results = await pipeline.exec()
-    const members = results?.map(([err, data]) => data)
+    const members = usersInRoom.map((userId, index) => ({
+      userId,
+      username: results?.[index]?.[1] || 'Anonymous'
+    })).filter(member => member.username)
     usersInRoom.forEach((userId) => {
       this.userConnections[userId]?.forEach((conn) => {
         if(conn.readyState === WebSocket.OPEN) {
@@ -314,9 +344,8 @@ class RoomManager {
     })
   } 
 
-
   private broadcastUserJoinToast = async (roomId: string, uid: string) => {
-    const username = await this.redis.hget(`user:info:${uid}`, 'username')
+    const username = await this.redis.hget(this.getUserInfoKey(uid), 'username')
     if(!username) {
       console.log(`username for user:${uid} not found`)
       return
@@ -335,7 +364,7 @@ class RoomManager {
   }
 
   private broadcastUserLeaveToast = async (roomId: string, uid: string) => {
-    const username = await this.redis.hget(`user:info:${uid}`, 'username')
+    const username = await this.redis.hget(this.getUserInfoKey(uid), 'username')
     if(!username) {
       console.log(`username for user:${uid} not found`)
       return

@@ -89,6 +89,9 @@ export default async function configureWebSocketServer(server: Server) {
           roomManager.handleCodeChange(ws, request.payload.code)
           break;
 
+        case "changeLanguage":
+          roomManager.changeLanguage(ws, request.payload.language)
+
         default:
           console.error(`Invalid request type ${(request as any).type}`);
           break;
