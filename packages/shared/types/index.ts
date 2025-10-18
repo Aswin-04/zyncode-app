@@ -23,6 +23,13 @@ interface CodeChangePayload {
   }
 }
 
+interface ChangeLanguagePayload {
+  type: "changeLanguage", 
+  payload: {
+    language: string 
+  }
+}
+
 interface BaseResponse {
   type: "response",
   eventType: WSEventType 
@@ -51,12 +58,14 @@ export type WSEventType =
   | "room:members-update"
   | "room:user-join"
   | "room:user-leave"
+  | "room:language-update"
 
 export type WSClientRequest = 
   | CreateRoomPayload 
   | JoinRoomPayload 
   | LeaveRoomPayload 
   | CodeChangePayload
+  | ChangeLanguagePayload
 
 export type WSResponse<T=any> = SuccessResponse<T> | ErrorResponse
 
