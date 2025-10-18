@@ -47,7 +47,10 @@ export type WSEventType =
   | "room:leave"
   | "room:code-update"
   | "session:init"
-  | "execution:result";
+  | "execution:result"
+  | "room:members-update"
+  | "room:user-join"
+  | "room:user-leave"
 
 export type WSClientRequest = 
   | CreateRoomPayload 
