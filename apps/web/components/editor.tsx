@@ -4,7 +4,7 @@ import { useWebSocket } from "@/lib/providers/web-socket-provider";
 import Editor, { OnChange } from "@monaco-editor/react";
 import { useEffect, useRef, useState, memo } from "react";
 import { WSClientRequest, WSResponse } from "@repo/shared/types";
-import { useCode } from "@/lib/providers/code-provider";
+import { useEditor } from "@/lib/providers/editor-provider";
 
 const isBinary = (message: unknown): message is Blob => {
   return (
@@ -17,7 +17,7 @@ const isBinary = (message: unknown): message is Blob => {
 const CodeEditor = () => {
   const { ws } = useWebSocket();
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const {code, setCode} = useCode()
+  const { code, setCode, language, setLanguage } = useEditor();
   const onChangeHandler: OnChange = (latestCode: string | undefined) => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
 
@@ -62,7 +62,7 @@ const CodeEditor = () => {
   return (
     <div className="h-[calc(100vh-70px)] p-10 border-1">
       <Editor
-        language="javascript"
+        language={language}
         height={"100%"}
         theme={"vs-dark"}
         options={{ minimap: { enabled: false } }}

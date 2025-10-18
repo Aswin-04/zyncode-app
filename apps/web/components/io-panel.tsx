@@ -5,7 +5,7 @@ import { useState } from "react";
 import { useWebSocket } from "@/lib/providers/web-socket-provider";
 import { WSResponse } from "@repo/shared/types";
 import { useCurrentUser } from "@/lib/providers/current-user-provider";
-import { useCode } from "@/lib/providers/code-provider";
+import { useEditor } from "@/lib/providers/editor-provider";
 import { useInput } from "@/lib/providers/input-provider";
 import { useExecutionResult } from "@/lib/providers/execution-result-provider";
 import { useRoomId } from "@/lib/providers/roomId-provider";
@@ -28,7 +28,7 @@ const IOPanel = () => {
   const user = useCurrentUser();
   const { ws } = useWebSocket();
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const { code } = useCode();
+  const { code } = useEditor();
   const { roomId } = useRoomId();
   const { input, setInput } = useInput();
   const { executionResult, setExecutionResult } = useExecutionResult();
