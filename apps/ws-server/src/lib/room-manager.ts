@@ -17,13 +17,11 @@ interface ExecutionResult {
 
 const USER_KEY_PREFIX = 'user:'
 const ROOM_KEY_PREFIX = 'room:'
-const TTL = 120 * 1000  // in ms
 const FLUSH_INTERVAL = 20 * 1000 // in ms
 
 class RoomManager {
   private userConnections: Record<string, Set<WebSocket>> = {}
   private latestRoomCode: Record<string, string> = {}
-  private roomCleanupTimers: Record<string, NodeJS.Timeout> = {}
   private redisSub: Redis
   private redis: Redis 
   
@@ -131,8 +129,12 @@ class RoomManager {
         
         if(roomId) {
           await this.redis.srem(this.getRoomKey(roomId), userId)
-          const roomSize = await this.redis.scard(this.getRoomKey(roomId))
-          if(roomSize == 0) this.scheduleRoomCleanup(roomId)
+          const roomExists = await this.redis.exists(this.getRoomKey(roomId))
+          if(!roomExists) await this.cleanupEmptyRoom(roomId)
+          else {
+            await this.broadcastUserLeaveToast(roomId, userId)
+            await this.broadcastMembersToRoom(roomId)
+          }
         }
       }
     }
@@ -153,7 +155,7 @@ class RoomManager {
 
     const roomKey = this.getRoomKey(roomIdToJoin)
     if(!(await this.redis.exists(roomKey))) {
-      this.sendError(client, "room:join", `Room with ID '${roomIdToJoin}' does not exist.`)
+      return this.sendError(client, "room:join", `Room with ID '${roomIdToJoin}' does not exist.`)
     }
     await this.setUserRoomState(userId, roomIdToJoin, "room:join")    
   }
@@ -165,16 +167,26 @@ class RoomManager {
     const pipeline = this.redis.pipeline()
     pipeline.srem(this.getRoomKey(roomId), userId)
     pipeline.del(this.getUserKey(userId))
-    pipeline.del(this.getRoomCodeKey(roomId))
     await pipeline.exec()
 
-    delete this.latestRoomCode[roomId]
-
+    const roomExists = await this.redis.exists(this.getRoomKey(roomId))
+    if(!roomExists) await this.cleanupEmptyRoom(roomId)
+    else {
+      await this.broadcastUserLeaveToast(roomId, userId)
+      await this.broadcastMembersToRoom(roomId)
+    }
+    
     this.userConnections[userId]?.forEach((conn) => {
       conn.roomId = undefined 
       this.sendResponse(conn, "room:leave", {roomId, message: `You have successfully left room: ${roomId}.` })
     })
-    }
+  }
+
+  private cleanupEmptyRoom = async (roomId: string) => {
+    await this.redis.del(this.getRoomCodeKey(roomId))
+    delete this.latestRoomCode[roomId]
+    console.log(`Cleaned up empty room ${roomId}`)
+  }
 
   public handleCodeChange = async (client: WebSocket, latestCode: string) => {
     const {userId, roomId} = client 
@@ -213,6 +225,12 @@ class RoomManager {
       client.roomId = newRoomId
       this.sendResponse(client, eventType, {roomId: newRoomId, latestCode, message})
     })
+
+    if(eventType === 'room:join') {
+      await this.broadcastUserJoinToast(newRoomId, userId)
+    }
+
+    await this.broadcastMembersToRoom(newRoomId)
   }
 
   private getLatestRoomCode = async(roomId: string) => {
@@ -223,32 +241,7 @@ class RoomManager {
     return latestCode
   }
 
-  private scheduleRoomCleanup = (roomId: string) => {
-    if(roomId in this.roomCleanupTimers) {
-      clearTimeout(this.roomCleanupTimers[roomId])
-    }
 
-    const timeout = setTimeout(async () => {
-      const pipeline = this.redis.pipeline()
-      pipeline.del(this.getRoomKey(roomId))
-      pipeline.del(this.getRoomCodeKey(roomId))
-      await pipeline.exec()
-
-      delete this.latestRoomCode[roomId]
-      delete this.roomCleanupTimers[roomId]
-
-      console.log(`Room ${roomId} cleaned up after TTL`)      
-    }, TTL)
-
-    this.roomCleanupTimers[roomId] = timeout
-  }
-
-  private cancelRoomCleanup = (roomId: string) => {
-    if(roomId in this.roomCleanupTimers) {
-      clearTimeout(this.roomCleanupTimers[roomId])
-      delete this.roomCleanupTimers[roomId]
-    }
-  }
 
   private persistRoomCodeToRedis = () => {
     setInterval(async () => {
@@ -275,8 +268,19 @@ class RoomManager {
       const { userId } = client
       if (!userId || !roomId) return
 
+      const roomExists = await this.redis.exists(this.getRoomKey(roomId))
+      if(!roomExists) {
+        console.log(`Room ${roomId} not found for reconnecting user ${userId}, starting fresh session`)
+
+        client.roomId = undefined 
+        await this.redis.del(this.getUserKey(userId))
+        this.sendResponse(client, "session:init", {
+          message: "Previous room not found, starting new session"
+        })
+        return 
+      }
+
       client.roomId = roomId 
-      this.cancelRoomCleanup(roomId)
 
       const pipeline = this.redis.pipeline()
       pipeline.sadd(this.getRoomKey(roomId), userId)
@@ -289,6 +293,64 @@ class RoomManager {
         latestCode,
         message: `Reconnected to room ${roomId}`
       })
+
+      
+      await this.broadcastUserJoinToast(roomId, userId)
+      await this.broadcastMembersToRoom(roomId)
+  }
+
+  private broadcastMembersToRoom = async (roomId: string) => {
+    const usersInRoom = await this.redis.smembers(this.getRoomKey(roomId))
+    const pipeline = this.redis.pipeline()
+    usersInRoom.forEach((userId) => pipeline.hget(`user:info:${userId}`, "username"))
+    const results = await pipeline.exec()
+    const members = results?.map(([err, data]) => data)
+    usersInRoom.forEach((userId) => {
+      this.userConnections[userId]?.forEach((conn) => {
+        if(conn.readyState === WebSocket.OPEN) {
+          this.sendResponse(conn, "room:members-update", {members})
+        }
+      })
+    })
+  } 
+
+
+  private broadcastUserJoinToast = async (roomId: string, uid: string) => {
+    const username = await this.redis.hget(`user:info:${uid}`, 'username')
+    if(!username) {
+      console.log(`username for user:${uid} not found`)
+      return
+    }
+    const usersInRoom = await this.redis.smembers(this.getRoomKey(roomId))
+    usersInRoom.forEach((userId) => {
+      this.userConnections[userId]?.forEach((conn) => {
+        if(userId != uid && conn.readyState === WebSocket.OPEN) {
+          this.sendResponse(conn, "room:user-join", {
+            username,
+            message: `${username} joined the room`
+          })
+        }
+      })
+    })
+  }
+
+  private broadcastUserLeaveToast = async (roomId: string, uid: string) => {
+    const username = await this.redis.hget(`user:info:${uid}`, 'username')
+    if(!username) {
+      console.log(`username for user:${uid} not found`)
+      return
+    }
+    const usersInRoom = await this.redis.smembers(this.getRoomKey(roomId))
+    usersInRoom.forEach((userId) => {
+      this.userConnections[userId]?.forEach((conn) => {
+        if(userId != uid && conn.readyState === WebSocket.OPEN) {
+          this.sendResponse(conn, "room:user-leave", {
+            username,
+            message: `${username} left the room`
+          })
+        }
+      })
+    })
   }
 }
 

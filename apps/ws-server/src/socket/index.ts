@@ -32,7 +32,8 @@ export default async function configureWebSocketServer(server: Server) {
       const user = JSON.parse(data) 
       console.log(user)
       userId = user.userId
-
+      await redis.hset(`user:info:${user.userId}`, "username", user.name)
+      
     } catch (err: any) {
       console.error("WebSocket Auth Failed:", err.message);
       socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
