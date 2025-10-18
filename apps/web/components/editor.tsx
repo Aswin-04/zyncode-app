@@ -1,79 +1,76 @@
-"use client"
+"use client";
 
-import { useWebSocket } from '@/lib/providers/web-socket'
-import Editor, { OnChange } from '@monaco-editor/react'
-import { useEffect, useRef, useState, memo } from 'react'
-import { WSClientRequest, WSResponse} from "@repo/shared/types"
-
-interface CodeEditorProps {
-  code: string, 
-  setCode: (latestCode: string) => void
-}
+import { useWebSocket } from "@/lib/providers/web-socket-provider";
+import Editor, { OnChange } from "@monaco-editor/react";
+import { useEffect, useRef, useState, memo } from "react";
+import { WSClientRequest, WSResponse } from "@repo/shared/types";
+import { useCode } from "@/lib/providers/code-provider";
 
 const isBinary = (message: unknown): message is Blob => {
-  return typeof message === 'object' && Object.prototype.toString.call(message) === '[object Blob]' && message instanceof Blob
-}
+  return (
+    typeof message === "object" &&
+    Object.prototype.toString.call(message) === "[object Blob]" &&
+    message instanceof Blob
+  );
+};
 
-const CodeEditor = ({code, setCode}: CodeEditorProps) => {
+const CodeEditor = () => {
+  const { ws } = useWebSocket();
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const {code, setCode} = useCode()
+  const onChangeHandler: OnChange = (latestCode: string | undefined) => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
 
-    const { ws } =  useWebSocket()
-    const timeoutRef = useRef<NodeJS.Timeout | null>(null)
-    
+    if (latestCode === undefined || !ws) return;
 
-  const onChangeHandler:OnChange = (latestCode: string | undefined) => {
-    if(timeoutRef.current) clearTimeout(timeoutRef.current)
-
-    if(latestCode === undefined || !ws) return
-    
-    setCode(latestCode)
+    setCode(latestCode);
 
     timeoutRef.current = setTimeout(() => {
       const payload: WSClientRequest = {
-        type: 'codeChange',
+        type: "codeChange",
         payload: {
-          code: latestCode || ''
-        } 
-      }
-      ws.send(JSON.stringify(payload))
-    }, 100)
-  }
+          code: latestCode || "",
+        },
+      };
+      ws.send(JSON.stringify(payload));
+    }, 100);
+  };
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent<unknown>) => {
-      if(isBinary(event.data)) return
-      const message: WSResponse<{latestCode: string}>  = JSON.parse(event.data as string)
-      if(!message.success) {
-        console.log(message.error.message)
-        return
-      } 
-      
-      if(message.eventType === 'room:code-update') {
-        setCode(message.data.latestCode)
+      if (isBinary(event.data)) return;
+      const message: WSResponse<{ latestCode: string }> = JSON.parse(
+        event.data as string
+      );
+      if (!message.success) {
+        console.log(message.error.message);
+        return;
       }
-    }
 
-    ws?.addEventListener('message', handleMessage)
+      if (message.eventType === "room:code-update") {
+        setCode(message.data.latestCode);
+      }
+    };
+
+    ws?.addEventListener("message", handleMessage);
 
     return () => {
-      if(ws) ws.removeEventListener('message', handleMessage)
-      if(timeoutRef.current) clearTimeout(timeoutRef.current)
-    }
-
-  }, [ws])
+      if (ws) ws.removeEventListener("message", handleMessage);
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+  }, [ws]);
   return (
-    <div className='h-[calc(100vh-70px)] p-10 border-1'>
-      <Editor 
-        language='javascript' 
-        height={'100%'} 
-        theme={'vs-dark'}
-        options={
-          {minimap: {enabled: false}} 
-        }
+    <div className="h-[calc(100vh-70px)] p-10 border-1">
+      <Editor
+        language="javascript"
+        height={"100%"}
+        theme={"vs-dark"}
+        options={{ minimap: { enabled: false } }}
         value={code}
         onChange={onChangeHandler}
       />
     </div>
-  )
-}
+  );
+};
 
-export default memo(CodeEditor)
+export default memo(CodeEditor);

@@ -3,10 +3,11 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "sonner";
 import { getCurrentUser } from "@/lib/auth/session";
-import { CurrentUserProvider } from "@/lib/providers/current-user";
-import { WebSocketProvider } from "@/lib/providers/web-socket";
+import CurrentUserProvider from "@/lib/providers/current-user-provider";
+import WebSocketProvider from "@/lib/providers/web-socket-provider";
+import WorkspaceProvider from "@/lib/providers/workspace-provider";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -40,7 +41,9 @@ export default async function RootLayout({
       >
         <CurrentUserProvider currentUser={user}>
           <WebSocketProvider>
-            <main>{children}</main>
+            <WorkspaceProvider>
+              <main>{children}</main>
+            </WorkspaceProvider>
           </WebSocketProvider>
         </CurrentUserProvider>
         <Toaster />
