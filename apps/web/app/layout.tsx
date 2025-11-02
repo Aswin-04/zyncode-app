@@ -25,8 +25,11 @@ const montserrat = Montserrat({
 })
 
 export const metadata: Metadata = {
-  title: "Zyncode",
-  description: "collaborative code editor",
+  title: "zyncode",
+  description: "Collaborative code editor for devs",
+  icons: {
+    icon: '/favicon.svg'
+  }
 };
 
 export default async function RootLayout({
