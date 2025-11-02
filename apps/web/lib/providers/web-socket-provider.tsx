@@ -1,6 +1,11 @@
 "use client";
-import { createContext, use, useEffect, useState } from "react";
+import { createContext, use, useEffect, useMemo, useState } from "react";
 import { useCurrentUser } from "./current-user-provider";
+import { WSResponse } from "@repo/shared/types";
+import { toast } from "sonner";
+import { useEditor } from "./editor-provider";
+import { useExecutionResult } from "./execution-result-provider";
+import { useRoomId } from "./roomId-provider";
 
 const HEARTBEAT_INTERVAL = 9 * 1000;
 
@@ -29,8 +34,11 @@ const WebSocketProvider = ({
 }: {
   children: React.ReactNode;
 }) => {
-  const user = useCurrentUser();
 
+  const user = useCurrentUser();
+  const {setCode, setLanguage} = useEditor()
+  const {setExecutionResult} = useExecutionResult()
+  const {setRoomId} = useRoomId()
   const [ws, setWs] = useState<WebSocketExt | null>(null);
 
   useEffect(() => {
@@ -62,10 +70,68 @@ const WebSocketProvider = ({
       console.log("Websocket err: ", err);
     };
 
-    ws.onmessage = (event) => {
-      const message = event.data;
-      if (isBinary(message)) {
+    ws.onmessage = (event:MessageEvent<unknown>) => {
+      if (isBinary(event.data)) {
         heartbeat(ws);
+        return;
+      }
+      const response:WSResponse = JSON.parse(event.data as string)
+
+      switch(response.eventType) {
+
+        case 'room:create':
+        case 'room:join':
+          if(!response.success) {
+            console.error(response.error.message)
+            break;
+          }
+          const roomId = response.data.roomId 
+          setRoomId(roomId);
+          setCode(response.data.latestCode)
+          toast.success(response.data.message);
+          break
+
+        case 'room:leave':
+          if(!response.success) {
+            toast.error(response.error.message)
+            break
+          }
+          setRoomId('')
+          toast.success(response.data.message)
+          break
+
+        case 'session:init':
+          if(response.success) toast.success(response.data.message)
+          break
+
+        
+        case 'room:code-update':
+          if(!response.success) {
+            console.error(response.error.message)
+            break 
+          }
+          setCode(response.data.latestCode)
+          break
+
+        case 'room:language-update':
+          if(!response.success) {
+            toast.error(response.error.message)
+            break 
+          }
+          setLanguage(response.data.language)
+          break;
+
+        case 'room:user-join':
+        case 'room:user-leave':
+          if(response.success) toast.success(response.data.message)
+          break 
+
+
+        case 'execution:result':
+          if(response.success) {
+            setExecutionResult(response.data.executionResult)
+            break
+          }
       }
     };
 
@@ -75,7 +141,9 @@ const WebSocketProvider = ({
     };
   }, [user]);
 
-  return <WebSocketContext value={{ ws }}>{children}</WebSocketContext>;
+  const value = useMemo(() => ({ws}), [ws])
+
+  return <WebSocketContext value={value}>{children}</WebSocketContext>;
 };
 
 export const useWebSocket = () => {

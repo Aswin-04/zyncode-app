@@ -2,14 +2,14 @@
 import React, { createContext, use, useState } from 'react'
 
 type RoomIdState = {
-  roomId: string | null,
-  setRoomId: React.Dispatch<React.SetStateAction<string | null>>
+  roomId: string,
+  setRoomId: React.Dispatch<React.SetStateAction<string>>
 }
 
 const RoomIdContext = createContext<RoomIdState | undefined>(undefined)
 
 const RoomIdProvider = ({children}: {children: React.ReactNode}) => {
-  const [roomId, setRoomId] = useState<string | null>(null)
+  const [roomId, setRoomId] = useState<string>("")
   return (
     <RoomIdContext value={{roomId, setRoomId}} >{children}</RoomIdContext>
   )

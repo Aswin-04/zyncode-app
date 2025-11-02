@@ -1,10 +1,9 @@
-import React, { useState } from 'react'
+import React from 'react'
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
   DialogClose,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -12,21 +11,25 @@ import {
 } from "@/components/ui/dialog"
 import { toast } from 'sonner'
 import { WSClientRequest } from '@repo/shared/types'
-import { UserSession } from '@/lib/auth/types'
+import { useCurrentUser } from '@/lib/providers/current-user-provider'
+import { useWebSocket } from '@/lib/providers/web-socket-provider'
+import { useRoomId } from '@/lib/providers/roomId-provider'
 
-type User = UserSession | null
 
-export function DialogLeaveButton({user, ws, roomId}: {user: User, ws: WebSocketExt | null, roomId: string}) {
+export function DialogLeaveButton() {
 
+  const user = useCurrentUser()
+  const {ws} = useWebSocket()
+  const { roomId } = useRoomId()
 
   const handleLeave = () => {
     if(!user) {
-      toast.error('You must either Signup or Login to Join room', {position: 'top-center'})
+      toast.error('You must either Signup or Login to Join room')
       return
     }
 
     if(!ws) {
-      toast.error('Something went wrong, Please try again later', {position: 'top-center'})
+      toast.error('Something went wrong, Please try again later')
       return 
     }
 

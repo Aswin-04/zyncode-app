@@ -1,11 +1,6 @@
 'use client'
 import React, { createContext, use, useState } from 'react'
-
-interface ExecutionResult {
-  username: string;
-  stdin: string;
-  stdout: string;
-}
+import { ExecutionResult } from '@repo/shared/types'
 
 type ExectuionResultState = {
   executionResult: ExecutionResult | null,
@@ -14,7 +9,7 @@ type ExectuionResultState = {
 
 const ExecutionResultContext = createContext<ExectuionResultState | undefined>(undefined)
 
-const ExectuionResultProvider = ({children}: {children: React.ReactNode}) => {
+const ExecutionResultProvider = ({children}: {children: React.ReactNode}) => {
   const [executionResult, setExecutionResult] = useState<ExecutionResult | null>(null)
   return (
     <ExecutionResultContext value={{executionResult, setExecutionResult}} >{children}</ExecutionResultContext>
@@ -29,4 +24,4 @@ export const useExecutionResult = () => {
   return context
 }
 
-export default ExectuionResultProvider
+export default ExecutionResultProvider

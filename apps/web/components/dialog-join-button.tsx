@@ -14,33 +14,34 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { toast } from 'sonner'
 import { WSClientRequest } from '@repo/shared/types'
-import { UserSession } from '@/lib/auth/types'
+import { useCurrentUser } from '@/lib/providers/current-user-provider'
+import { useWebSocket } from '@/lib/providers/web-socket-provider'
 
-type User = UserSession | null
 
-export function DialogJoinButton({user, ws}: {user: User, ws: WebSocketExt | null}) {
+export function DialogJoinButton() {
 
-  const [roomId, setRoomId] = useState<string>('')
+  const user = useCurrentUser()
+  const {ws} = useWebSocket()
+  const [input, setInput] = useState('')
 
   const handleJoin = () => {
     if(!user) {
-      toast.error('You must either Signup or Login to Join room', {position: 'top-center'})
+      toast.error('You must either Signup or Login to Join room')
       return
     }
 
     if(!ws) {
-      toast.error('Something went wrong, Please try again later', {position: 'top-center'})
+      toast.error('Something went wrong, Please try again later')
       return 
     }
 
     const requestPayload: WSClientRequest = {
       type: 'join',
       payload: {
-        roomId: roomId.trim()
+        roomId: input.trim()
       }
     }
     ws.send(JSON.stringify(requestPayload))
-
   }
 
   return (
@@ -62,8 +63,8 @@ export function DialogJoinButton({user, ws}: {user: User, ws: WebSocketExt | nul
             </Label>
             <Input
               id="link"
-              value={roomId}
-              onChange={(e) => setRoomId(e.target.value)}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
               required
             />
           </div>

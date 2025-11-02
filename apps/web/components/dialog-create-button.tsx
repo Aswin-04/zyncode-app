@@ -11,20 +11,23 @@ import {
 } from "@/components/ui/dialog"
 import { toast } from 'sonner'
 import { WSClientRequest } from '@repo/shared/types'
-import { UserSession } from '@/lib/auth/types'
+import { useCurrentUser } from '@/lib/providers/current-user-provider'
+import { useWebSocket } from '@/lib/providers/web-socket-provider'
 
-type User = UserSession | null
 
-export function DialogCreateButton({user, ws}: {user: User, ws: WebSocketExt | null}) {
+export function DialogCreateButton() {
+
+  const user = useCurrentUser()
+  const {ws} = useWebSocket()
 
   const handleCreate = () => {
     if(!user) {
-      toast.error('You must either Signup or Login to Join room', {position: 'top-center'})
+      toast.error('You must either Signup or Login to Join room')
       return
     }
 
     if(!ws) {
-      toast.error('Something went wrong, Please try again later', {position: 'top-center'})
+      toast.error('Something went wrong, Please try again later')
       return 
     }
 
@@ -32,13 +35,12 @@ export function DialogCreateButton({user, ws}: {user: User, ws: WebSocketExt | n
       type: 'create',
     }
     ws.send(JSON.stringify(requestPayload))
-
   }
 
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <Button variant="outline">Create</Button>
+        <Button>Create</Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
