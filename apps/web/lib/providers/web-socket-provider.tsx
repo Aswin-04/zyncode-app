@@ -45,6 +45,7 @@ const WebSocketProvider = ({
   const [ws, setWs] = useState<WebSocketExt | null>(null);
 
   const attemptRef = useRef(0)
+  const connectRef = useRef<() => void>(() => {})
   const reconnectTimerRef = useRef<NodeJS.Timeout | null>(null)
 
   const getBackoffDealy = (attempt: number) => {
@@ -52,6 +53,26 @@ const WebSocketProvider = ({
     const exponentialDelay = BASE_DELAY * 2 ** attempt
     return Math.min(MAX_DELAY, exponentialDelay + jitter)
   }
+
+  const scheduleReconnect = useCallback( () => {
+    if(attemptRef.current >= MAX_RECONNECT_ATTEMPTS) {
+      console.error('Max reconnection attempts reached.')
+      toast.error('Failed to connect to server. Please refresh the page.', {
+        position: 'bottom-right',
+        duration: Infinity
+      })
+      return
+    }
+
+    const delay = getBackoffDealy(attemptRef.current)
+    console.log(`Reconnecting in ${Math.round(delay)}ms attempt (${attemptRef.current+1})`)
+
+    reconnectTimerRef.current && clearTimeout(reconnectTimerRef.current)
+    reconnectTimerRef.current = setTimeout(() => {
+      attemptRef.current++;
+      connectRef.current()
+    }, delay)
+  }, [])
 
   const connect = useCallback( () => {
 
@@ -77,8 +98,9 @@ const WebSocketProvider = ({
       heartbeat(socket);
     };
 
-    socket.onclose = () => {
+    socket.onclose = (event: CloseEvent) => {
       console.warn("ws connection closed");
+      if(event.code === 1000) return
       scheduleReconnect()
     };
 
@@ -151,23 +173,10 @@ const WebSocketProvider = ({
           }
       }
     };
-  }, [user, setCode, setLanguage, setExecutionResult, setRoomId])
+  }, [user, setCode, setLanguage, setExecutionResult, setRoomId, scheduleReconnect])
 
-
-  const scheduleReconnect = useCallback( () => {
-    if(attemptRef.current >= MAX_RECONNECT_ATTEMPTS) {
-      console.error('Max reconnection attempts reached.')
-      return
-    }
-
-    const delay = getBackoffDealy(attemptRef.current)
-    console.log(`Reconnecting in ${Math.round(delay)}ms attempt (${attemptRef.current+1})`)
-
-    reconnectTimerRef.current && clearTimeout(reconnectTimerRef.current)
-    reconnectTimerRef.current = setTimeout(() => {
-      attemptRef.current++;
-      connect()
-    }, delay)
+  useEffect(() => {
+    connectRef.current = connect
   }, [connect])
 
   useEffect(() => {
@@ -176,13 +185,11 @@ const WebSocketProvider = ({
     return () => {
       if(reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current)
       setWs(currentWs => {
-        currentWs?.close()
+        currentWs?.close(1000)
         return null
       })
     }
   }, [connect])
-
-
 
   const value = useMemo(() => ({ws}), [ws])
 
