@@ -1,54 +1,62 @@
+export type SupportedLanguage = "JavaScript" | "Java" | "C" | "C++" | "Python";
+
 interface CreateRoomPayload {
-  type: "create",
+  type: "create";
 }
 
 interface JoinRoomPayload {
-  type: "join",
+  type: "join";
   payload: {
-    roomId: string
-  }
+    roomId: string;
+  };
 }
 
 interface LeaveRoomPayload {
-  type: "leave",
+  type: "leave";
   payload: {
-    roomId: string
-  }
+    roomId: string;
+  };
 }
 
 interface CodeChangePayload {
-  type: "codeChange",
+  type: "codeChange";
   payload: {
-    code: string
-  }
+    code: string;
+  };
 }
 
 interface ChangeLanguagePayload {
-  type: "changeLanguage", 
+  type: "changeLanguage";
   payload: {
-    language: string 
+    language: SupportedLanguage;
+  };
+}
+
+
+export type AllSuccessResponses =  {
+  [K in WSEventType]: {
+    success: true, 
+    eventType: K 
+    data: WSDataMap[K]
   }
-}
+}[WSEventType]
 
-interface BaseResponse {
-  type: "response",
-  eventType: WSEventType 
-  success: boolean
-}
-
-interface SuccessResponse<T=any> extends BaseResponse {
-  success: true,
-  data: T
-}
-
-interface ErrorResponse extends BaseResponse {
-  success: false,
+export interface ErrorResponse {
+  eventType: WSEventType
+  success: false;
   error: {
-    message: string
-  }
+    message: string;
+  };
 }
 
-export type WSEventType = 
+export type SuccessResponse<T extends WSEventType> = {
+  eventType: T;
+  success: true;
+  data: WSDataMap[T];
+};
+
+
+export type WSEventType =
   | "room:create"
   | "room:join"
   | "room:leave"
@@ -58,15 +66,34 @@ export type WSEventType =
   | "room:members-update"
   | "room:user-join"
   | "room:user-leave"
-  | "room:language-update"
+  | "room:language-update";
 
-export type WSClientRequest = 
-  | CreateRoomPayload 
-  | JoinRoomPayload 
-  | LeaveRoomPayload 
+export type WSClientRequest =
+  | CreateRoomPayload
+  | JoinRoomPayload
+  | LeaveRoomPayload
   | CodeChangePayload
-  | ChangeLanguagePayload
+  | ChangeLanguagePayload;
 
-export type WSResponse<T=any> = SuccessResponse<T> | ErrorResponse
+export type WSResponse = AllSuccessResponses | ErrorResponse;
 
+export interface ExecutionResult {
+  username: string;
+  stdin: string;
+  stdout: string;
+  stderr: string;
+  verdict: string;
+}
 
+export interface WSDataMap {
+  "room:create": { roomId: string; latestCode: string; message: string };
+  "room:join": { roomId: string; latestCode: string; message: string };
+  "room:leave": { roomId: string; message: string };
+  "room:code-update": { latestCode: string };
+  "session:init": { message: string };
+  "execution:result": { executionResult: ExecutionResult };
+  "room:members-update": { members: { userId: string; username: string }[] };
+  "room:user-join": { username: string; message: string };
+  "room:user-leave": { username: string; message: string };
+  "room:language-update": { language: SupportedLanguage };
+}
