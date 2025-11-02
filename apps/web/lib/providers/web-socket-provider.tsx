@@ -1,5 +1,5 @@
 "use client";
-import { createContext, use, useEffect, useMemo, useState } from "react";
+import { createContext, use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useCurrentUser } from "./current-user-provider";
 import { WSResponse } from "@repo/shared/types";
 import { toast } from "sonner";
@@ -8,6 +8,9 @@ import { useExecutionResult } from "./execution-result-provider";
 import { useRoomId } from "./roomId-provider";
 
 const HEARTBEAT_INTERVAL = 9 * 1000;
+const MAX_RECONNECT_ATTEMPTS = 10
+const BASE_DELAY = 500 // ms
+const MAX_DELAY = 30000 // ms
 
 const isBinary = (message: any) => {
   return (
@@ -41,38 +44,52 @@ const WebSocketProvider = ({
   const {setRoomId} = useRoomId()
   const [ws, setWs] = useState<WebSocketExt | null>(null);
 
-  useEffect(() => {
+  const attemptRef = useRef(0)
+  const reconnectTimerRef = useRef<NodeJS.Timeout | null>(null)
+
+  const getBackoffDealy = (attempt: number) => {
+    const jitter = Math.random() * 1000 
+    const exponentialDelay = BASE_DELAY * 2 ** attempt
+    return Math.min(MAX_DELAY, exponentialDelay + jitter)
+  }
+
+  const connect = useCallback( () => {
+
+    if (!user) return;
+
     const WEBSOCKET_URL = process.env.NEXT_PUBLIC_WEBSOCKET_URL;
     const isProd = process.env.NODE_ENV === "production";
     if (isProd && !WEBSOCKET_URL)
       throw new Error("Failed to load env secretes");
 
-    if (!user) return;
-    const ws = new WebSocket(
+    const socket = new WebSocket(
       `${isProd ? WEBSOCKET_URL : "ws://localhost:8080"}`
     ) as WebSocketExt;
-    if (!ws) {
+    if (!socket) {
       throw new Error("unable to connect to wss");
     }
 
-    setWs(ws);
+    setWs(socket);
 
-    ws.onopen = () => {
-      heartbeat(ws);
-      console.log("connected to wss");
+    socket.onopen = () => {
+      console.log("connected to Websocket server");
+      attemptRef.current = 0
+      heartbeat(socket);
     };
 
-    ws.onclose = () => {
-      console.log("ws connection closed");
+    socket.onclose = () => {
+      console.warn("ws connection closed");
+      scheduleReconnect()
     };
 
-    ws.onerror = (err) => {
+    socket.onerror = (err) => {
       console.log("Websocket err: ", err);
+      socket.close()
     };
 
-    ws.onmessage = (event:MessageEvent<unknown>) => {
+    socket.onmessage = (event:MessageEvent<unknown>) => {
       if (isBinary(event.data)) {
-        heartbeat(ws);
+        heartbeat(socket);
         return;
       }
       const response:WSResponse = JSON.parse(event.data as string)
@@ -123,7 +140,7 @@ const WebSocketProvider = ({
 
         case 'room:user-join':
         case 'room:user-leave':
-          if(response.success) toast.success(response.data.message)
+          if(response.success) toast.info(response.data.message)
           break 
 
 
@@ -134,12 +151,38 @@ const WebSocketProvider = ({
           }
       }
     };
+  }, [user, setCode, setLanguage, setExecutionResult, setRoomId])
+
+
+  const scheduleReconnect = useCallback( () => {
+    if(attemptRef.current >= MAX_RECONNECT_ATTEMPTS) {
+      console.error('Max reconnection attempts reached.')
+      return
+    }
+
+    const delay = getBackoffDealy(attemptRef.current)
+    console.log(`Reconnecting in ${Math.round(delay)}ms attempt (${attemptRef.current+1})`)
+
+    reconnectTimerRef.current && clearTimeout(reconnectTimerRef.current)
+    reconnectTimerRef.current = setTimeout(() => {
+      attemptRef.current++;
+      connect()
+    }, delay)
+  }, [connect])
+
+  useEffect(() => {
+    connect()
 
     return () => {
-      ws.close();
-      setWs(null);
-    };
-  }, [user]);
+      if(reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current)
+      setWs(currentWs => {
+        currentWs?.close()
+        return null
+      })
+    }
+  }, [connect])
+
+
 
   const value = useMemo(() => ({ws}), [ws])
 
