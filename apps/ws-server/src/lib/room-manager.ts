@@ -213,6 +213,7 @@ class RoomManager {
     const ownerId = await this.redis.hget(this.getRoomMetaKey(roomId), 'ownerId')
     if(userId !== ownerId) {
       this.sendError(client, 'room:language-update', 'Only the room owner can change the language.')
+      return
     }
 
     await this.redis.hset(this.getRoomMetaKey(roomId), 'language', language)
