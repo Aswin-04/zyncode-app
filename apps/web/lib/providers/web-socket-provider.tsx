@@ -67,7 +67,7 @@ const WebSocketProvider = ({
     const delay = getBackoffDealy(attemptRef.current)
     console.log(`Reconnecting in ${Math.round(delay)}ms attempt (${attemptRef.current+1})`)
 
-    reconnectTimerRef.current && clearTimeout(reconnectTimerRef.current)
+    if(reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current)
     reconnectTimerRef.current = setTimeout(() => {
       attemptRef.current++;
       connectRef.current()
