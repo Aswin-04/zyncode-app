@@ -2,7 +2,7 @@ import "dotenv/config";
 import { Server } from 'http'
 import {WebSocket,  WebSocketServer } from "ws";
 import RoomManager from "../lib/room-manager";
-import { WSClientRequest } from "@repo/shared/types"
+import { SupportedLanguage, WSClientRequest } from "@repo/shared/types"
 import * as cookie from 'cookie'
 import { getRedisClient } from "@repo/redis";
 

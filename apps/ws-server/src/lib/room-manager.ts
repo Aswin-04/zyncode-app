@@ -1,19 +1,12 @@
 import { WebSocket } from "ws";
 import { generateRoomId } from "./room-id-generator";
-import {  WSResponse, WSEventType } from "@repo/shared/types";
+import {  ExecutionResult,  WSEventType,  ErrorResponse, WSDataMap, SuccessResponse, SupportedLanguage } from "@repo/shared/types";
 import Redis from 'ioredis'
 import { getRedisClient, getRedisSubscriber } from "@repo/redis";
 
 // room:roomId --> set of userIds
 // user:userId --> roomId
 
-interface ExecutionResult {
-  username: string, 
-  stdin: string,
-  stdout: string
-  stderr: string 
-  verdict: string
-}
 
 const USER_KEY_PREFIX = 'user:'
 const ROOM_KEY_PREFIX = 'room:'
@@ -62,17 +55,17 @@ class RoomManager {
 
       if(channel.startsWith(`${ROOM_KEY_PREFIX}`)) {
         const users = await this.redis.smembers(channel)
-        users.forEach(userId => this.broadcastToAll(userId, executionResult))
+        users.forEach(userId => this.broadcastToAll(userId, {executionResult}))
       }
 
       if(channel.startsWith(`${USER_KEY_PREFIX}`)) {
         const userId = channel.substring(USER_KEY_PREFIX.length)
-        this.broadcastToAll(userId, executionResult)
+        this.broadcastToAll(userId, {executionResult})
       }
     })
   }
 
-  private broadcastToAll = (userId: string, data: object) => {
+  private broadcastToAll = (userId: string, data: {executionResult: ExecutionResult}) => {
     this.userConnections[userId]?.forEach((client) => {
       if(client.readyState === WebSocket.OPEN) {
         this.sendResponse(client, "execution:result", data)
@@ -108,13 +101,13 @@ class RoomManager {
     }
   }
 
-  private sendResponse = (client: WebSocket, eventType: WSEventType, data: object) => {
-    const response: WSResponse = {type: "response", eventType, success: true, data}
+  private sendResponse = <T extends WSEventType>(client: WebSocket, eventType: T, data: WSDataMap[T]) => {
+    const response: SuccessResponse<T> = {eventType, success: true, data}
     client.send(JSON.stringify(response))
   }
 
   private sendError = (client: WebSocket, eventType: WSEventType, message: string) => {
-    const response: WSResponse = {type: "response", eventType, success: false, error: {message}}
+    const response: ErrorResponse = {eventType, success: false, error: {message}}
     client.send(JSON.stringify(response))
   }
 
@@ -149,7 +142,7 @@ class RoomManager {
     const newRoomId = await this.generateUniqueRoomId()
     await this.redis.hset(this.getRoomMetaKey(newRoomId), {
       'ownerId': userId,
-      'language': 'javascript'
+      'language': 'JavaScript'
     })
     await this.setUserRoomState(userId, newRoomId, "room:create")
   }
@@ -213,13 +206,13 @@ class RoomManager {
     })
   }
 
-  public changeLanguage = async (client: WebSocket, language: string) => {
+  public changeLanguage = async (client: WebSocket, language: SupportedLanguage) => {
     const {userId, roomId} = client 
     if(!userId || !roomId) return
 
     const ownerId = await this.redis.hget(this.getRoomMetaKey(roomId), 'ownerId')
     if(userId !== ownerId) {
-      this.sendError(client, 'room:language-update', '"Only the room owner can change the language.')
+      this.sendError(client, 'room:language-update', 'Only the room owner can change the language.')
     }
 
     await this.redis.hset(this.getRoomMetaKey(roomId), 'language', language)
@@ -331,10 +324,13 @@ class RoomManager {
     const pipeline = this.redis.pipeline()
     usersInRoom.forEach((userId) => pipeline.hget(this.getUserInfoKey(userId), "username"))
     const results = await pipeline.exec()
-    const members = usersInRoom.map((userId, index) => ({
-      userId,
-      username: results?.[index]?.[1] || 'Anonymous'
-    })).filter(member => member.username)
+    const members = usersInRoom.map((userId, index) => {
+      const raw = results?.[index]?.[1] as unknown 
+      return {
+        userId,
+        username: (typeof raw === 'string') ? raw : 'Anonymous'
+      }
+    }).filter(member => member.username)
     usersInRoom.forEach((userId) => {
       this.userConnections[userId]?.forEach((conn) => {
         if(conn.readyState === WebSocket.OPEN) {
