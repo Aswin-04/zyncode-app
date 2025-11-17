@@ -20,38 +20,43 @@ const executeCode = (jobPayload: JobPayload): Promise<{userId: string, username:
     const {jobId, userId, username, roomId, language, code, stdin} = jobPayload
     console.log(jobPayload)
   
-    const jobDir = path.join(process.cwd(), 'tmp', 'jobs', jobId)
-    fs.mkdirSync(jobDir)
-    fs.writeFileSync(`${jobDir}/input.txt`, stdin)
-    fs.writeFileSync(`${jobDir}/output.txt`, "")
-    fs.writeFileSync(`${jobDir}/error.txt`, "")
+    const containerJobDir = path.join(process.cwd(), 'tmp', 'jobs', jobId)
+    const hostTmpDir = process.env.HOST_TMP_PATH
+    if(!hostTmpDir) {
+      return reject(new Error(`FATAL: HOST_TMP_PATH is not set.`))
+    }
+    const hostJobDir = path.join(hostTmpDir, 'jobs', jobId)
+    fs.mkdirSync(containerJobDir, {recursive: true})
+    fs.writeFileSync(`${containerJobDir}/input.txt`, stdin)
+    fs.writeFileSync(`${containerJobDir}/output.txt`, "")
+    fs.writeFileSync(`${containerJobDir}/error.txt`, "")
   
     switch(language) {
       case 'c':
-        fs.writeFileSync(`${jobDir}/main.c`, code)
+        fs.writeFileSync(`${containerJobDir}/main.c`, code)
         break;
   
       case 'cpp':
-        fs.writeFileSync(`${jobDir}/main.cpp`, code)
+        fs.writeFileSync(`${containerJobDir}/main.cpp`, code)
         break;
   
       case 'py':
-        fs.writeFileSync(`${jobDir}/main.py`, code)
+        fs.writeFileSync(`${containerJobDir}/main.py`, code)
         break;
   
       case 'java':
-        fs.writeFileSync(`${jobDir}/Main.java`, code)
+        fs.writeFileSync(`${containerJobDir}/Main.java`, code)
         break;
   
       case 'js':
-        fs.writeFileSync(`${jobDir}/main.js`, code)
+        fs.writeFileSync(`${containerJobDir}/main.js`, code)
         break; 
     }
   
     const jobContainer = spawn("docker", [
       "run", 
       "--rm", 
-      "-v", `${jobDir}:/app`, 
+      "-v", `${hostJobDir}:/app`, 
       "--read-only",
       "--memory=512m",
       "--memory-swap=512m",
@@ -62,23 +67,30 @@ const executeCode = (jobPayload: JobPayload): Promise<{userId: string, username:
       `zyncode-${language}-runner`
     ])
     jobContainer.on('close', (code, signal) => {
-      const stdout = fs.readFileSync(`${jobDir}/output.txt`, 'utf-8') 
-      const stderr =  fs.readFileSync(`${jobDir}/error.txt`, 'utf-8')
-      let verdict = 'Unknown Error'
-      if(signal) {
-        if(signal == 'SIGKILL') verdict = 'Memory Limit Exceeded'
-        else if(signal == 'SIGXCPU') verdict = 'Time Limit Exceeded'
-        else verdict = `Killed ${signal}`
-      }
+
+      try {
+        const stdout = fs.readFileSync(`${containerJobDir}/output.txt`, 'utf-8') 
+        const stderr =  fs.readFileSync(`${containerJobDir}/error.txt`, 'utf-8')
+        let verdict = 'Unknown Error'
+        if(signal) {
+          if(signal == 'SIGKILL') verdict = 'Memory Limit Exceeded'
+          else if(signal == 'SIGXCPU') verdict = 'Time Limit Exceeded'
+          else verdict = `Killed ${signal}`
+        }
+        
+        else if(code !== null) {
+          if(code == 0) verdict = 'Success'
+          else if(code == 124) verdict = 'Time Limit Exceeded'
+          else if(code == 137) verdict = 'Memory Limit Exceeded' 
+          else verdict = 'Compile/Runtime Error'
+        }
+        console.log(`return-code: ${code}, signal: ${signal}, verdict: ${verdict}`)
+        resolve({userId, username, roomId, stdin, stdout, stderr, verdict})
+      } 
       
-      else if(code !== null) {
-        if(code == 0) verdict = 'Success'
-        else if(code == 124) verdict = 'Time Limit Exceeded'
-        else if(code == 137) verdict = 'Memory Limit Exceeded' 
-        else verdict = 'Compile/Runtime Error'
+      finally {
+        fs.rmSync(containerJobDir, {recursive: true, force: true})
       }
-      console.log(`return-code: ${code}, signal: ${signal}, verdict: ${verdict}`)
-      resolve({userId, username, roomId, stdin, stdout, stderr, verdict})
     })
   
     jobContainer.on('error', (err) => {
