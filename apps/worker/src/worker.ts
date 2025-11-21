@@ -21,11 +21,7 @@ const executeCode = (jobPayload: JobPayload): Promise<{userId: string, username:
     console.log(jobPayload)
   
     const containerJobDir = path.join(process.cwd(), 'tmp', 'jobs', jobId)
-    const hostTmpDir = process.env.HOST_TMP_PATH
-    if(!hostTmpDir) {
-      return reject(new Error(`FATAL: HOST_TMP_PATH is not set.`))
-    }
-    const hostJobDir = path.join(hostTmpDir, 'jobs', jobId)
+
     fs.mkdirSync(containerJobDir, {recursive: true})
     fs.writeFileSync(`${containerJobDir}/input.txt`, stdin)
     fs.writeFileSync(`${containerJobDir}/output.txt`, "")
@@ -56,7 +52,7 @@ const executeCode = (jobPayload: JobPayload): Promise<{userId: string, username:
     const jobContainer = spawn("docker", [
       "run", 
       "--rm", 
-      "-v", `${hostJobDir}:/app`, 
+      "-v", `${containerJobDir}:/app`, 
       "--read-only",
       "--memory=512m",
       "--memory-swap=512m",

@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  ws-server:
+    build: 
+      context: .
+      dockerfile: apps/ws-server/Dockerfile
+    container_name: zyncode-ws-server
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - PORT=${PORT}
+      - REDIS_URL=${REDIS_URL}
+  
+  worker:
+    build: 
+      context: .
+      dockerfile: apps/worker/Dockerfile 
+    container_name: zyncode-worker
+    restart: unless-stopped 
+    environment:
+      - REDIS_URL=${REDIS_URL}
+      - HOST_TMP_PATH=${PWD}/apps/worker/tmp
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${PWD}/apps/worker/tmp:/app/deploy/tmp
